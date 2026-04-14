@@ -20,7 +20,8 @@ class PollResult(str, Enum):
     NO_NEW_CHUNKS = "NO_NEW_CHUNKS"
 
 
-# Sentinel place with no filters — used when no specific place context is active
+# _SENTINEL_PLACE is a shared module-level constant used when no place context is active.
+# It must never be mutated — all consumers must treat it as read-only.
 _SENTINEL_PLACE = Place(
     place_id="__global__", name="Global", place_type="global",
     item_pool=PlaceItemPool(),
@@ -99,18 +100,19 @@ class SyncAgent:
             if chunk.confidence < self.min_confidence:
                 continue
 
-            # Award XP for the activity itself
+            # Award XP for the activity itself; skip entire chunk if label is unknown
             try:
                 cat = Category(chunk.label)
-                award_category_xp(
-                    self.db,
-                    character_id=self.character_id,
-                    category=cat,
-                    xp=xp_for_chunk(chunk),
-                )
-                self.db.commit()
             except ValueError:
-                pass  # unknown label — skip XP
+                continue  # unknown label — skip XP and drops
+
+            award_category_xp(
+                self.db,
+                character_id=self.character_id,
+                category=cat,
+                xp=xp_for_chunk(chunk),
+            )
+            self.db.commit()
 
             # Roll drops
             rolls = self.strategy.compute(chunk, luck)

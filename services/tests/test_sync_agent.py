@@ -8,6 +8,7 @@ from services.models.enums import Category, Rarity
 from services.models.item import ItemDefinition, DropRequirement
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.agent import SyncAgent, PollResult
+from services.sync_agent.tracker_client import TrackerClient
 from services.drop_engine.strategies import SessionStrategy
 
 
@@ -67,7 +68,7 @@ def test_sync_agent_poll_processes_chunks(db):
             "time_of_day": "morning",
         }
     ]
-    mock_client = MagicMock()
+    mock_client = MagicMock(spec=TrackerClient)
     mock_client.fetch_chunks.return_value = (chunks, "c_001")
 
     agent = SyncAgent(
@@ -86,7 +87,7 @@ def test_sync_agent_poll_processes_chunks(db):
 
 
 def test_sync_agent_poll_on_cooldown_returns_cooldown(db):
-    mock_client = MagicMock()
+    mock_client = MagicMock(spec=TrackerClient)
     mock_client.fetch_chunks.return_value = ([], None)
     rl = RateLimiter(cooldown_sec=3600)
     rl.record_trigger("player_default")
@@ -109,7 +110,7 @@ def test_sync_agent_poll_advances_cursor(db):
             "confidence": 0.88, "started_at": "2026-04-14T20:00:00+00:00",
         }
     ]
-    mock_client = MagicMock()
+    mock_client = MagicMock(spec=TrackerClient)
     mock_client.fetch_chunks.return_value = (chunks, "c_001")
 
     agent = SyncAgent(
@@ -126,7 +127,7 @@ def test_sync_agent_poll_advances_cursor(db):
 
 
 def test_sync_agent_poll_no_chunks_returns_no_new_chunks(db):
-    mock_client = MagicMock()
+    mock_client = MagicMock(spec=TrackerClient)
     mock_client.fetch_chunks.return_value = ([], None)
     agent = SyncAgent(
         db=db,
@@ -145,7 +146,7 @@ def test_sync_agent_skips_low_confidence_chunk(db):
             "confidence": 0.1, "started_at": "2026-04-14T09:00:00+00:00",
         }
     ]
-    mock_client = MagicMock()
+    mock_client = MagicMock(spec=TrackerClient)
     mock_client.fetch_chunks.return_value = (chunks, "c_low")
     agent = SyncAgent(
         db=db,
@@ -157,3 +158,20 @@ def test_sync_agent_skips_low_confidence_chunk(db):
     agent.poll()
     ledger = db.execute("SELECT * FROM reward_ledger").fetchall()
     assert len(ledger) == 0
+
+
+def test_sync_agent_poll_handles_unknown_label(db):
+    """poll() must return OK and not raise when chunk label is unrecognized."""
+    chunks = [{
+        "chunk_id": "c_bogus", "label": "BOGUS_ACTIVITY",
+        "duration_sec": 900, "confidence": 0.8,
+        "started_at": "2026-04-14T10:00:00+00:00",
+    }]
+    mock_client = MagicMock(spec=TrackerClient)
+    mock_client.fetch_chunks.return_value = (chunks, "c_bogus")
+    agent = SyncAgent(db=db, tracker_client=mock_client, character_id="player_default")
+    result = agent.poll()
+    assert result == PollResult.OK   # must not raise
+    # No XP should be awarded for an unknown label
+    rows = db.execute("SELECT * FROM player_category_xp WHERE character_id='player_default'").fetchall()
+    assert len(rows) == 0
