@@ -8,7 +8,7 @@ def init_db(conn: sqlite3.Connection) -> None:
     """Execute schema.sql against the given connection."""
     schema = _SCHEMA_PATH.read_text(encoding="utf-8")
     conn.executescript(schema)
-    conn.commit()
+    conn.commit()  # executescript already commits; this is a no-op but kept for clarity
 
 
 def get_db(path: str = "game.db") -> sqlite3.Connection:

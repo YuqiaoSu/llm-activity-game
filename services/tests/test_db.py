@@ -21,3 +21,30 @@ def test_get_db_returns_connection(tmp_path):
     conn = get_db(str(db_path))
     assert conn is not None
     conn.close()
+
+
+def test_get_db_enables_wal_mode(tmp_path):
+    db_path = tmp_path / "test.db"
+    conn = get_db(str(db_path))
+    row = conn.execute("PRAGMA journal_mode").fetchone()
+    assert row[0] == "wal"
+    conn.close()
+
+
+def test_get_db_enables_foreign_keys(tmp_path):
+    db_path = tmp_path / "test.db"
+    conn = get_db(str(db_path))
+    row = conn.execute("PRAGMA foreign_keys").fetchone()
+    assert row[0] == 1
+    conn.close()
+
+
+def test_get_db_creates_tables_in_file_db(tmp_path):
+    db_path = tmp_path / "test.db"
+    conn = get_db(str(db_path))
+    cur = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+    tables = {row[0] for row in cur.fetchall()}
+    assert "player_profile" in tables
+    assert "reward_ledger" in tables
+    assert "places" in tables
+    conn.close()
