@@ -41,7 +41,6 @@ def award_category_xp(
         """,
         (character_id, str(category.value), xp),
     )
-    conn.commit()
 
 
 def get_total_xp(conn: sqlite3.Connection, character_id: str) -> int:

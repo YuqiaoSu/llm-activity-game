@@ -19,10 +19,10 @@ def _row_to_place(conn: sqlite3.Connection, row: sqlite3.Row) -> Place:
         category=row["category"],
         state=row["state"],
         unlock_condition=json.loads(row["unlock_condition"]) if row["unlock_condition"] else None,
-        item_pool=PlaceItemPool(**json.loads(row["item_pool"])),
-        connected_to=json.loads(row["connected_to"]),
+        item_pool=PlaceItemPool(**json.loads(row["item_pool"])) if row["item_pool"] else PlaceItemPool(),
+        connected_to=json.loads(row["connected_to"]) if row["connected_to"] else [],
         parent_place=row["parent_place"],
-        metadata=json.loads(row["metadata"]),
+        metadata=json.loads(row["metadata"]) if row["metadata"] else {},
         slots=[
             PlaceSlot(
                 slot_id=s["slot_id"],
@@ -57,6 +57,7 @@ def save_place(conn: sqlite3.Connection, place: Place) -> None:
             json.dumps(place.metadata),
         ),
     )
+    conn.execute("DELETE FROM place_slots WHERE place_id=?", (place.place_id,))
     for slot in place.slots:
         conn.execute(
             """

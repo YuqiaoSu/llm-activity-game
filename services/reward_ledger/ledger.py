@@ -4,7 +4,6 @@ import sqlite3
 import uuid
 from datetime import datetime, timezone
 from services.models.item import ItemDefinition
-from services.progression.xp import award_category_xp
 
 _XP_PER_DROP = 5   # flat XP bonus for receiving any item
 
@@ -18,11 +17,12 @@ def record_drop(
 ) -> bool:
     """
     Idempotent drop record. Returns True if newly inserted, False if duplicate.
-    On new insert: writes inventory row, awards category XP, queues notification.
+    Uses a savepoint so duplicate detection never rolls back an outer transaction.
     """
-    ledger_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    ledger_id = str(uuid.uuid4())
 
+    conn.execute("SAVEPOINT record_drop")
     try:
         conn.execute(
             """
@@ -31,9 +31,11 @@ def record_drop(
             """,
             (ledger_id, chunk_id, roll_n, item.item_id, character_id, now),
         )
+        conn.execute("RELEASE SAVEPOINT record_drop")
     except sqlite3.IntegrityError:
-        conn.rollback()
-        return False  # duplicate — silently ignore
+        conn.execute("ROLLBACK TO SAVEPOINT record_drop")
+        conn.execute("RELEASE SAVEPOINT record_drop")
+        return False
 
     instance_id = str(uuid.uuid4())
     conn.execute(
@@ -44,10 +46,16 @@ def record_drop(
         (instance_id, character_id, item.item_id, now, chunk_id),
     )
 
-    # Award XP for the item's category
-    award_category_xp(conn, character_id=character_id, category=item.category, xp=_XP_PER_DROP)
+    # Inline XP upsert — do NOT call award_category_xp() to avoid premature commit
+    conn.execute(
+        """
+        INSERT INTO player_category_xp (character_id, category, xp)
+        VALUES (?, ?, ?)
+        ON CONFLICT (character_id, category) DO UPDATE SET xp = xp + excluded.xp
+        """,
+        (character_id, str(item.category.value), _XP_PER_DROP),
+    )
 
-    # Queue a notification for Godot
     notification_id = str(uuid.uuid4())
     payload = json.dumps({
         "item_id": item.item_id,
