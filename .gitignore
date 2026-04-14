@@ -1,0 +1,29 @@
+# Workspace state
+.claude/
+.superpowers/
+.tmp/
+
+# Build output
+build/
+dist/
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+env/
+
+# JavaScript / frontend
+node_modules/
+
+# Local model or large binary artifacts
+*.gguf
+.superpowers/
