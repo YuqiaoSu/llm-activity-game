@@ -10,8 +10,6 @@ def compute_level(total_xp: int) -> int:
     for i, threshold in enumerate(XP_PER_LEVEL):
         if total_xp >= threshold:
             level = i + 1
-        else:
-            break
     return level
 
 

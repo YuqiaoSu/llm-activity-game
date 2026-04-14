@@ -65,7 +65,7 @@ def weighted_draw(
     weights: list[float] = []
     for item in items:
         base = base_weights.get(item.rarity, 1.0)
-        mod = drop_weight_mods.get(str(item.rarity), 1.0)
+        mod = drop_weight_mods.get(item.rarity.value, 1.0)
         weights.append(base * mod)
 
     return random.choices(items, weights=weights, k=1)[0]

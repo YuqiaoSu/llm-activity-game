@@ -85,3 +85,22 @@ def test_weighted_draw_returns_item():
 
 def test_weighted_draw_empty_returns_none():
     assert weighted_draw([], DEFAULT_RARITY_WEIGHTS, {}) is None
+
+
+def test_eligible_items_explicit_empty_list_blocks_all():
+    """explicit_items=[] means whitelist of nothing — no items eligible."""
+    place = _place(explicit=[])
+    result = eligible_items(CATALOGUE, _chunk("WORK"), place)
+    assert result == []
+
+
+def test_weighted_draw_applies_drop_weight_mods():
+    """A 1000x multiplier on COMMON should make COMMON overwhelmingly likely."""
+    random.seed(99)
+    items = [CATALOGUE[0], CATALOGUE[1]]  # work_common (COMMON) and work_rare (RARE)
+    results = [
+        weighted_draw(items, DEFAULT_RARITY_WEIGHTS, drop_weight_mods={"COMMON": 1000.0})
+        for _ in range(20)
+    ]
+    common_count = sum(1 for r in results if r.rarity == Rarity.COMMON)
+    assert common_count >= 18   # statistically near-certain with 1000x boost

@@ -1,11 +1,13 @@
 import sqlite3
 import pytest
+from datetime import datetime, timezone
 from services.storage.db import init_db
 from services.models.enums import Category
 from services.progression.config import XP_PER_LEVEL, EVOLUTION_STAGES, XP_PER_MINUTE
 from services.progression.xp import (
-    compute_level, compute_evolution_stage, award_category_xp, get_total_xp,
+    compute_level, compute_evolution_stage, award_category_xp, get_total_xp, xp_for_chunk,
 )
+from services.contracts.chunk import Chunk
 
 
 @pytest.fixture
@@ -69,3 +71,19 @@ def test_get_total_xp(db):
     award_category_xp(db, character_id="p1", category=Category.WORK, xp=200)
     award_category_xp(db, character_id="p1", category=Category.GAME, xp=100)
     assert get_total_xp(db, "p1") == 300
+
+
+def test_xp_for_chunk_one_per_minute():
+    chunk = Chunk(
+        chunk_id="c1", label="WORK", duration_sec=3600,
+        confidence=0.9, started_at=datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc),
+    )
+    assert xp_for_chunk(chunk) == 60
+
+
+def test_xp_for_chunk_minimum_one_for_sub_minute():
+    chunk = Chunk(
+        chunk_id="c2", label="WORK", duration_sec=30,
+        confidence=0.9, started_at=datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc),
+    )
+    assert xp_for_chunk(chunk) == 1
