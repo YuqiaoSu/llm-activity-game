@@ -13,7 +13,7 @@ def init_db(conn: sqlite3.Connection) -> None:
 
 def get_db(path: str = "game.db") -> sqlite3.Connection:
     """Open (or create) the SQLite database at `path`, initialize schema, return connection."""
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
