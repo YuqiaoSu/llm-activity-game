@@ -27,3 +27,8 @@ node_modules/
 # Local model or large binary artifacts
 *.gguf
 .superpowers/
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
