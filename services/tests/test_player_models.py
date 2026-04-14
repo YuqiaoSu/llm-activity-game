@@ -23,3 +23,14 @@ def test_player_profile_total_xp_is_sum_of_categories():
         total_xp=1000,
     )
     assert p.total_xp == sum(p.category_xp.values())
+
+
+def test_player_profile_total_xp_cannot_be_spoofed():
+    """total_xp is always derived from category_xp, even if caller passes a different value."""
+    p = PlayerProfile(
+        character_id="p1",
+        visual=CharacterVisual(base_sprite="x.png"),
+        total_xp=9999,
+        category_xp={},
+    )
+    assert p.total_xp == 0
