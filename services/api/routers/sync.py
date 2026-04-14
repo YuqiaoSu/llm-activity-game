@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Request
+import httpx
+from fastapi import APIRouter, Request, HTTPException
 from services.sync_agent.agent import SyncAgent, PollResult
 from services.sync_agent.tracker_client import TrackerClient
 
@@ -22,5 +23,8 @@ def poll_now(request: Request) -> dict:
         tracker_client=TrackerClient(),
         character_id="player_default",
     )
-    result = agent.poll(manual=True)
+    try:
+        result = agent.poll(manual=True)
+    except httpx.HTTPError:
+        raise HTTPException(status_code=503, detail="Tracker unavailable")
     return {"result": result.value}

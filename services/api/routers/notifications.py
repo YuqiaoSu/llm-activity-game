@@ -18,7 +18,7 @@ def ack_notification(notification_id: str, request: Request) -> dict:
         "UPDATE pending_notifications SET acknowledged=1 WHERE notification_id=?",
         (notification_id,),
     )
-    db.commit()
     if result.rowcount == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
+    db.commit()
     return {"acknowledged": True}

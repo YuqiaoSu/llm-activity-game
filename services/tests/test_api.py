@@ -131,3 +131,15 @@ def test_ack_notification(client, seeded_db):
 def test_ack_nonexistent_notification(client):
     r = client.post("/notifications/does-not-exist/ack")
     assert r.status_code == 404
+
+
+def test_poll_now_no_new_chunks(client, monkeypatch):
+    from services.sync_agent import tracker_client as tc_module
+    monkeypatch.setattr(
+        tc_module.TrackerClient,
+        "fetch_chunks",
+        lambda self, after_cursor, limit=50: ([], None),
+    )
+    r = client.post("/sync/poll-now")
+    assert r.status_code == 200
+    assert "result" in r.json()

@@ -22,6 +22,12 @@ def get_player_profile(request: Request) -> dict:
     level = compute_level(total_xp)
     stage = compute_evolution_stage(level)
 
+    try:
+        visual = json.loads(row["visual"])
+        equipped_items = json.loads(row["equipped_items"])
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=500, detail="Corrupted player profile data") from exc
+
     return {
         "character_id": row["character_id"],
         "name": row["name"],
@@ -29,6 +35,6 @@ def get_player_profile(request: Request) -> dict:
         "level": level,
         "evolution_stage": stage,
         "category_xp": category_xp,
-        "visual": json.loads(row["visual"]),
-        "equipped_items": json.loads(row["equipped_items"]),
+        "visual": visual,
+        "equipped_items": equipped_items,
     }
