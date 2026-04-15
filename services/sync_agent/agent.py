@@ -7,8 +7,8 @@ from services.models.enums import Category
 from services.models.place import Place, PlaceItemPool
 from services.drop_engine.strategies import RollStrategy, SessionStrategy
 from services.drop_engine.lottery import eligible_items, weighted_draw, DEFAULT_RARITY_WEIGHTS
-from services.reward_ledger.ledger import record_drop
-from services.progression.xp import award_category_xp, xp_for_chunk
+from services.reward_ledger.ledger import record_drop, insert_level_up_notification
+from services.progression.xp import award_category_xp, xp_for_chunk, get_total_xp, compute_level
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
 from services.models.item import ItemDefinition
@@ -90,6 +90,7 @@ class SyncAgent:
 
         catalogue = self._load_catalogue()
         luck = self._get_player_luck()
+        current_level = compute_level(get_total_xp(self.db, self.character_id))
 
         for raw in chunk_dicts:
             try:
@@ -128,6 +129,14 @@ class SyncAgent:
                         item=winner,
                         character_id=self.character_id,
                     )
+
+            # Level-up detection: includes XP from both the chunk and any drops
+            new_level = compute_level(get_total_xp(self.db, self.character_id))
+            if new_level > current_level:
+                for lvl in range(current_level + 1, new_level + 1):
+                    insert_level_up_notification(self.db, self.character_id, lvl)
+                self.db.commit()
+                current_level = new_level
 
         if new_cursor:
             self._save_cursor(new_cursor)

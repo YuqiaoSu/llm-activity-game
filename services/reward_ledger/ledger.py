@@ -75,6 +75,24 @@ def record_drop(
     return True
 
 
+def insert_level_up_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    new_level: int,
+) -> None:
+    """Insert a LEVEL_UP pending_notification. Caller is responsible for commit."""
+    notification_id = str(uuid.uuid4())
+    payload = json.dumps({"new_level": new_level})
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
+        VALUES (?, ?, 'level_up', ?, ?)
+        """,
+        (notification_id, character_id, payload, now),
+    )
+
+
 def get_pending_notifications(
     conn: sqlite3.Connection,
     character_id: str,

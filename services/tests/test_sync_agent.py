@@ -175,3 +175,61 @@ def test_sync_agent_poll_handles_unknown_label(db):
     # No XP should be awarded for an unknown label
     rows = db.execute("SELECT * FROM player_category_xp WHERE character_id='player_default'").fetchall()
     assert len(rows) == 0
+
+
+def test_sync_agent_level_up_notification_emitted(db):
+    """A LEVEL_UP notification is created when XP crosses a level threshold.
+
+    Level 2 requires 100 XP (XP_PER_LEVEL[1]=100). A 120-min WORK chunk
+    awards 120 XP → crosses level 2 → one LEVEL_UP notification.
+    """
+    chunks = [{
+        "chunk_id": "c_levelup", "label": "WORK", "duration_sec": 7200,  # 120 min → 120 XP
+        "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
+        "time_of_day": "morning",
+    }]
+    mock_client = MagicMock(spec=TrackerClient)
+    mock_client.fetch_chunks.return_value = (chunks, "c_levelup")
+    agent = SyncAgent(
+        db=db,
+        tracker_client=mock_client,
+        character_id="player_default",
+        strategy=SessionStrategy(),
+    )
+    agent.poll()
+
+    notifications = db.execute(
+        "SELECT * FROM pending_notifications WHERE character_id='player_default' AND event_type='level_up'"
+    ).fetchall()
+    assert len(notifications) == 1
+    import json
+    payload = json.loads(notifications[0]["payload"])
+    assert payload["new_level"] == 2
+
+
+def test_sync_agent_multiple_level_ups_in_one_poll(db):
+    """Each level crossed gets its own notification when multiple levels are gained at once."""
+    # Level 2 = 100 XP, Level 3 = 250 XP. A 260-min chunk awards 260 XP → crosses 2 and 3.
+    chunks = [{
+        "chunk_id": "c_multi", "label": "WORK", "duration_sec": 15600,  # 260 min → 260 XP
+        "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
+        "time_of_day": "morning",
+    }]
+    mock_client = MagicMock(spec=TrackerClient)
+    mock_client.fetch_chunks.return_value = (chunks, "c_multi")
+    agent = SyncAgent(
+        db=db,
+        tracker_client=mock_client,
+        character_id="player_default",
+        strategy=SessionStrategy(),
+    )
+    agent.poll()
+
+    notifications = db.execute(
+        "SELECT payload FROM pending_notifications "
+        "WHERE character_id='player_default' AND event_type='level_up' "
+        "ORDER BY created_at ASC"
+    ).fetchall()
+    import json
+    levels = [json.loads(n["payload"])["new_level"] for n in notifications]
+    assert levels == [2, 3]
