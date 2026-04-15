@@ -82,10 +82,13 @@ def test_get_inventory(client):
     items = r.json()
     assert isinstance(items, list)
     assert len(items) == 1
-    assert items[0]["item_id"] == "scroll_001"
-    assert items[0]["name"] == "Scroll"      # enriched from item_definitions JSON
-    assert items[0]["rarity"] == "COMMON"    # enriched from item_definitions JSON
-    assert items[0]["category"] == "WORK"    # enriched from item_definitions JSON
+    item = items[0]
+    assert item["item_id"] == "scroll_001"
+    assert item["quantity"] == 1             # one instance in fixture
+    assert item["name"] == "Scroll"          # enriched from item_definitions JSON
+    assert item["rarity"] == "COMMON"        # enriched from item_definitions JSON
+    assert item["category"] == "WORK"        # enriched from item_definitions JSON
+    assert "instance_id" not in item         # grouped response, no per-instance id
 
 
 def test_get_places(client):
