@@ -7,10 +7,12 @@ from services.models.enums import Category
 from services.models.place import Place, PlaceItemPool
 from services.drop_engine.strategies import RollStrategy, SessionStrategy
 from services.drop_engine.lottery import eligible_items, weighted_draw, DEFAULT_RARITY_WEIGHTS
-from services.reward_ledger.ledger import record_drop, insert_level_up_notification
+from services.reward_ledger.ledger import record_drop, insert_level_up_notification, insert_place_unlock_notification
 from services.progression.xp import award_category_xp, xp_for_chunk, get_total_xp, compute_level
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
+from services.place_service.service import list_places, check_unlock_condition
+from services.models.enums import PlaceState
 from services.models.item import ItemDefinition
 
 
@@ -76,6 +78,25 @@ class SyncAgent:
         ).fetchone()
         return row["luck"] if row else 5
 
+    def _check_place_unlocks(self, player_level: int) -> None:
+        """Unlock any LOCKED places whose condition is now met and notify the player."""
+        places = list_places(self.db)
+        newly_unlocked = False
+        for place in places:
+            if place.state != PlaceState.LOCKED:
+                continue
+            if check_unlock_condition(self.db, place, player_level):
+                self.db.execute(
+                    "UPDATE places SET state='UNLOCKED' WHERE place_id=?",
+                    (place.place_id,),
+                )
+                insert_place_unlock_notification(
+                    self.db, self.character_id, place.place_id, place.name
+                )
+                newly_unlocked = True
+        if newly_unlocked:
+            self.db.commit()
+
     def poll(self, manual: bool = False) -> PollResult:
         if manual and not self.rate_limiter.can_trigger(self.character_id):
             return PollResult.ON_COOLDOWN
@@ -136,6 +157,7 @@ class SyncAgent:
                 for lvl in range(current_level + 1, new_level + 1):
                     insert_level_up_notification(self.db, self.character_id, lvl)
                 self.db.commit()
+                self._check_place_unlocks(new_level)
                 current_level = new_level
 
         if new_cursor:

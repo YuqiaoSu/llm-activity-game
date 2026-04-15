@@ -93,6 +93,25 @@ def insert_level_up_notification(
     )
 
 
+def insert_place_unlock_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    place_id: str,
+    place_name: str,
+) -> None:
+    """Insert a PLACE_UNLOCK pending_notification. Caller is responsible for commit."""
+    notification_id = str(uuid.uuid4())
+    payload = json.dumps({"place_id": place_id, "place_name": place_name})
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        """
+        INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
+        VALUES (?, ?, 'place_unlock', ?, ?)
+        """,
+        (notification_id, character_id, payload, now),
+    )
+
+
 def get_pending_notifications(
     conn: sqlite3.Connection,
     character_id: str,

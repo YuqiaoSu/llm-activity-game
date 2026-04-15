@@ -4,8 +4,10 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
 from services.storage.db import init_db
-from services.models.enums import Category, Rarity
+from services.models.enums import Category, Rarity, PlaceState
 from services.models.item import ItemDefinition, DropRequirement
+from services.models.place import Place, PlaceItemPool, Condition
+from services.place_service.service import save_place
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.agent import SyncAgent, PollResult
 from services.sync_agent.tracker_client import TrackerClient
@@ -233,3 +235,43 @@ def test_sync_agent_multiple_level_ups_in_one_poll(db):
     import json
     levels = [json.loads(n["payload"])["new_level"] for n in notifications]
     assert levels == [2, 3]
+
+
+def test_sync_agent_place_unlock_triggered_on_level_up(db):
+    """A LOCKED place with a player_level condition unlocks when level is reached."""
+    # Seed a locked place requiring level 2
+    locked_place = Place(
+        place_id="cave_001", name="Crystal Cave", place_type="dungeon",
+        state=PlaceState.LOCKED,
+        unlock_condition=Condition(condition_type="player_level", params={"min_level": 2}),
+        item_pool=PlaceItemPool(),
+    )
+    save_place(db, locked_place)
+
+    # 120 XP chunk → level 2 → should unlock cave_001
+    chunks = [{
+        "chunk_id": "c_unlock", "label": "WORK", "duration_sec": 7200,
+        "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
+        "time_of_day": "morning",
+    }]
+    mock_client = MagicMock(spec=TrackerClient)
+    mock_client.fetch_chunks.return_value = (chunks, "c_unlock")
+    agent = SyncAgent(
+        db=db,
+        tracker_client=mock_client,
+        character_id="player_default",
+        strategy=SessionStrategy(),
+    )
+    agent.poll()
+
+    # Place should now be UNLOCKED
+    row = db.execute("SELECT state FROM places WHERE place_id='cave_001'").fetchone()
+    assert row["state"] == "UNLOCKED"
+
+    # A place_unlock notification should exist
+    notif = db.execute(
+        "SELECT payload FROM pending_notifications "
+        "WHERE character_id='player_default' AND event_type='place_unlock'"
+    ).fetchone()
+    assert notif is not None
+    assert json.loads(notif["payload"])["place_id"] == "cave_001"
