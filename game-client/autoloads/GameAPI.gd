@@ -3,6 +3,8 @@ extends Node
 
 const BASE_URL := "http://localhost:8765"
 
+var _cached_profile: Dictionary = {}
+
 signal profile_updated(data: Dictionary)
 signal inventory_updated(items: Array)
 signal notifications_updated(notifs: Array)
@@ -12,7 +14,11 @@ signal places_updated(places: Array)
 
 
 func fetch_profile() -> void:
+    # Emit cached data immediately so the HUD renders without a blank frame on re-entry
+    if not _cached_profile.is_empty():
+        profile_updated.emit(_cached_profile)
     _http_get("/player/profile", func(data: Dictionary) -> void:
+        _cached_profile = data
         profile_updated.emit(data)
     )
 
