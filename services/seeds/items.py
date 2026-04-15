@@ -88,4 +88,21 @@ SEED_ITEMS: list[ItemDefinition] = [
         icon="celestial_coin.png",
         description="Appears without warning. Always meaningful.",
     ),
+    # ── slot-effect items (usable in place slots) ──────────────────────────
+    ItemDefinition(
+        item_id="focus_amplifier_uncommon", name="Focus Amplifier",
+        category=Category.WORK, rarity=Rarity.UNCOMMON,
+        drop_requirement=DropRequirement(activity_label="WORK", min_duration_sec=1800),
+        effects=[Effect(effect_type="xp_multiplier", target="slot", params={"factor": 1.5})],
+        icon="focus_amplifier.png",
+        description="Place this in a slot to earn 50% more XP from all activities.",
+    ),
+    ItemDefinition(
+        item_id="fortune_chip_uncommon", name="Fortune Chip",
+        category=Category.GAME, rarity=Rarity.UNCOMMON,
+        drop_requirement=DropRequirement(activity_label="GAME", min_duration_sec=1800),
+        effects=[Effect(effect_type="drop_weight_mod", target="slot", params={"rarity": "RARE", "factor": 2.0})],
+        icon="fortune_chip.png",
+        description="Place this in a slot to double the weight of RARE item drops.",
+    ),
 ]
