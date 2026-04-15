@@ -24,6 +24,6 @@ func _on_notifications(notifs: Array) -> void:
 		if nid.is_empty() or _seen_ids.has(nid):
 			continue
 		if _seen_ids.size() >= MAX_SEEN_IDS:
-			_seen_ids.clear()
+			_seen_ids.erase(_seen_ids.keys()[0])
 		_seen_ids[nid] = true
 		item_dropped.emit(notif)

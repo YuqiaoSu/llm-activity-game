@@ -17,7 +17,10 @@ func fetch_profile() -> void:
 
 func fetch_inventory() -> void:
     _http_get("/inventory", func(data) -> void:
-        inventory_updated.emit(data as Array)
+        if data is Array:
+            inventory_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /inventory response is not an Array")
     )
 
 
