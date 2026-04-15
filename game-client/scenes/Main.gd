@@ -52,8 +52,22 @@ func _on_profile(data: Dictionary) -> void:
 	var stage := mini(data.get("evolution_stage", 0) as int, _STAGE_COLORS.size() - 1)
 	_companion_rect.color = _STAGE_COLORS[stage]
 	_evolution_label.text = _STAGE_NAMES[stage]
-	_level_label.text = "Level %d" % data.get("level", 1)
-	_xp_label.text = "%d XP total" % data.get("total_xp", 0)
+
+	var level: int = data.get("level", 1)
+	_level_label.text = "Level %d" % level
+
+	var total_xp: int = data.get("total_xp", 0)
+	var xp_end = data.get("level_xp_end", null)
+	if xp_end != null:
+		var xp_start: int = data.get("level_xp_start", 0)
+		var progress: int = total_xp - xp_start
+		var needed: int   = (xp_end as int) - xp_start
+		_xp_label.text = "%d XP  ·  %d / %d to level %d" % [
+			total_xp, progress, needed, level + 1
+		]
+	else:
+		_xp_label.text = "%d XP  ·  Max level!" % total_xp
+
 	_rebuild_xp_bars(data.get("category_xp", {}) as Dictionary)
 
 

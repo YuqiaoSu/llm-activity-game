@@ -74,6 +74,13 @@ def test_get_player_profile(client):
     assert data["level"] >= 1
     assert "category_xp" in data
     assert "WORK" in data["category_xp"]
+    # Level progress fields
+    assert "level_xp_start" in data
+    assert "level_xp_end" in data
+    assert data["level_xp_start"] <= data["total_xp"]
+    # end is None at max level, otherwise greater than start
+    if data["level_xp_end"] is not None:
+        assert data["level_xp_end"] > data["level_xp_start"]
 
 
 def test_player_profile_all_categories_present(client):

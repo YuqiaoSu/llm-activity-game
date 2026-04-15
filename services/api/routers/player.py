@@ -1,7 +1,7 @@
 import json
 from fastapi import APIRouter, Request, HTTPException
 from services.models.enums import Category
-from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage
+from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage, compute_level_xp_range
 
 router = APIRouter()
 
@@ -24,6 +24,7 @@ def get_player_profile(request: Request) -> dict:
     total_xp = get_total_xp(db, "player_default")
     level = compute_level(total_xp)
     stage = compute_evolution_stage(level)
+    level_xp_start, level_xp_end = compute_level_xp_range(level)
 
     try:
         visual = json.loads(row["visual"])
@@ -36,6 +37,8 @@ def get_player_profile(request: Request) -> dict:
         "name": row["name"],
         "total_xp": total_xp,
         "level": level,
+        "level_xp_start": level_xp_start,
+        "level_xp_end": level_xp_end,   # null when at max level
         "evolution_stage": stage,
         "category_xp": category_xp,
         "visual": visual,

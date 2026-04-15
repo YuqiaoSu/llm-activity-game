@@ -13,6 +13,18 @@ def compute_level(total_xp: int) -> int:
     return level
 
 
+def compute_level_xp_range(level: int) -> tuple[int, int | None]:
+    """Return (start_xp, end_xp) for the given level.
+
+    start_xp: cumulative XP at which this level begins.
+    end_xp: cumulative XP required to reach the next level,
+            or None if level is at or beyond the defined maximum.
+    """
+    start = XP_PER_LEVEL[level - 1] if level - 1 < len(XP_PER_LEVEL) else XP_PER_LEVEL[-1]
+    end: int | None = XP_PER_LEVEL[level] if level < len(XP_PER_LEVEL) else None
+    return start, end
+
+
 def compute_evolution_stage(level: int) -> int:
     """Return evolution stage for a given level."""
     for stage, (min_lvl, max_lvl) in sorted(EVOLUTION_STAGES.items(), reverse=True):
