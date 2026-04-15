@@ -8,6 +8,28 @@ from services.models.item import ItemDefinition
 _XP_PER_DROP = 5   # flat XP bonus for receiving any item
 
 
+def _insert_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    event_type: str,
+    payload: dict,
+) -> None:
+    """Insert one row into pending_notifications. Caller is responsible for commit."""
+    conn.execute(
+        """
+        INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            str(uuid.uuid4()),
+            character_id,
+            event_type,
+            json.dumps(payload),
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+
+
 def record_drop(
     conn: sqlite3.Connection,
     chunk_id: str,
@@ -56,21 +78,13 @@ def record_drop(
         (character_id, str(item.category.value), _XP_PER_DROP),
     )
 
-    notification_id = str(uuid.uuid4())
-    payload = json.dumps({
+    _insert_notification(conn, character_id, "item_drop", {
         "item_id": item.item_id,
         "instance_id": instance_id,
         "item_name": item.name,
         "rarity": item.rarity.value,
         "category": item.category.value,
     })
-    conn.execute(
-        """
-        INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
-        VALUES (?, ?, 'item_drop', ?, ?)
-        """,
-        (notification_id, character_id, payload, now),
-    )
     conn.commit()
     return True
 
@@ -80,17 +94,8 @@ def insert_level_up_notification(
     character_id: str,
     new_level: int,
 ) -> None:
-    """Insert a LEVEL_UP pending_notification. Caller is responsible for commit."""
-    notification_id = str(uuid.uuid4())
-    payload = json.dumps({"new_level": new_level})
-    now = datetime.now(timezone.utc).isoformat()
-    conn.execute(
-        """
-        INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
-        VALUES (?, ?, 'level_up', ?, ?)
-        """,
-        (notification_id, character_id, payload, now),
-    )
+    """Insert a level_up pending_notification. Caller is responsible for commit."""
+    _insert_notification(conn, character_id, "level_up", {"new_level": new_level})
 
 
 def insert_place_unlock_notification(
@@ -99,17 +104,11 @@ def insert_place_unlock_notification(
     place_id: str,
     place_name: str,
 ) -> None:
-    """Insert a PLACE_UNLOCK pending_notification. Caller is responsible for commit."""
-    notification_id = str(uuid.uuid4())
-    payload = json.dumps({"place_id": place_id, "place_name": place_name})
-    now = datetime.now(timezone.utc).isoformat()
-    conn.execute(
-        """
-        INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
-        VALUES (?, ?, 'place_unlock', ?, ?)
-        """,
-        (notification_id, character_id, payload, now),
-    )
+    """Insert a place_unlock pending_notification. Caller is responsible for commit."""
+    _insert_notification(conn, character_id, "place_unlock", {
+        "place_id": place_id,
+        "place_name": place_name,
+    })
 
 
 def get_pending_notifications(
