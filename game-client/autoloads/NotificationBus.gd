@@ -2,6 +2,8 @@
 extends Node
 
 signal item_dropped(notification: Dictionary)
+signal level_up_occurred(notification: Dictionary)
+signal place_unlocked(notification: Dictionary)
 
 const POLL_INTERVAL_SEC := 3.0
 const MAX_SEEN_IDS := 200
@@ -26,4 +28,13 @@ func _on_notifications(notifs: Array) -> void:
 		if _seen_ids.size() >= MAX_SEEN_IDS:
 			_seen_ids.erase(_seen_ids.keys()[0])
 		_seen_ids[nid] = true
-		item_dropped.emit(notif)
+		match notif.get("event_type", "item_drop"):
+			"item_drop":
+				item_dropped.emit(notif)
+			"level_up":
+				level_up_occurred.emit(notif)
+			"place_unlock":
+				place_unlocked.emit(notif)
+			var unknown:
+				push_warning("NotificationBus: unknown event_type '%s'" % unknown)
+				item_dropped.emit(notif)  # fall back so it surfaces rather than silently drops
