@@ -19,6 +19,9 @@ func _ready() -> void:
 
 
 func _show_drop(notif: Dictionary) -> void:
+	# ACK displaced notification if panel is already visible with a pending ID
+	if _panel.visible and not _pending_nid.is_empty():
+		GameAPI.ack_notification(_pending_nid)
 	_pending_nid = notif.get("notification_id", "")
 	var payload_str: String = notif.get("payload", "{}")
 	var payload: Dictionary = JSON.parse_string(payload_str) if not payload_str.is_empty() else {}
