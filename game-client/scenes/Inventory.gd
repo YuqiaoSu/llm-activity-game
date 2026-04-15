@@ -24,8 +24,11 @@ func _on_inventory(items: Array) -> void:
 	_count_label.text = "Inventory (%d)" % items.size()
 	for child in _item_list.get_children():
 		child.queue_free()
-	for item: Dictionary in items:
-		_item_list.add_child(_make_card(item))
+	for raw in items:
+		if not raw is Dictionary:
+			push_warning("Inventory: skipping non-Dictionary item: %s" % str(raw))
+			continue
+		_item_list.add_child(_make_card(raw as Dictionary))
 
 
 func _make_card(item: Dictionary) -> Control:
@@ -40,7 +43,7 @@ func _make_card(item: Dictionary) -> Control:
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var cat_lbl := Label.new()
-	cat_lbl.text = (item.get("category", "") as String).capitalize()
+	cat_lbl.text = str(item.get("category", "")).capitalize()
 
 	hbox.add_child(dot)
 	hbox.add_child(name_lbl)
