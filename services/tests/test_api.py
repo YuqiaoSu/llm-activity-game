@@ -76,6 +76,20 @@ def test_get_player_profile(client):
     assert "WORK" in data["category_xp"]
 
 
+def test_player_profile_all_categories_present(client):
+    """category_xp always contains every Category value, even those with 0 XP."""
+    from services.models.enums import Category
+    r = client.get("/player/profile")
+    assert r.status_code == 200
+    cat_xp = r.json()["category_xp"]
+    for cat in Category:
+        assert cat.value in cat_xp, f"{cat.value} missing from category_xp"
+    # Fixture only seeds WORK; all others should default to 0
+    for cat in Category:
+        if cat != Category.WORK:
+            assert cat_xp[cat.value] == 0, f"{cat.value} should be 0, got {cat_xp[cat.value]}"
+
+
 def test_get_inventory(client):
     r = client.get("/inventory")
     assert r.status_code == 200
@@ -89,6 +103,37 @@ def test_get_inventory(client):
     assert item["rarity"] == "COMMON"        # enriched from item_definitions JSON
     assert item["category"] == "WORK"        # enriched from item_definitions JSON
     assert "instance_id" not in item         # grouped response, no per-instance id
+
+
+def test_equip_item(client, seeded_db):
+    r = client.patch("/inventory/scroll_001/equip", json={"equipped": True})
+    assert r.status_code == 200
+    data = r.json()
+    assert data["item_id"] == "scroll_001"
+    assert data["equipped"] is True
+    row = seeded_db.execute(
+        "SELECT equipped FROM inventory WHERE item_id='scroll_001'"
+    ).fetchone()
+    assert row["equipped"] == 1
+
+
+def test_equip_item_idempotent(client, seeded_db):
+    client.patch("/inventory/scroll_001/equip", json={"equipped": True})
+    r = client.patch("/inventory/scroll_001/equip", json={"equipped": True})
+    assert r.status_code == 200
+
+
+def test_unequip_item(client, seeded_db):
+    seeded_db.execute("UPDATE inventory SET equipped=1 WHERE item_id='scroll_001'")
+    seeded_db.commit()
+    r = client.patch("/inventory/scroll_001/equip", json={"equipped": False})
+    assert r.status_code == 200
+    assert r.json()["equipped"] is False
+
+
+def test_equip_item_not_found(client):
+    r = client.patch("/inventory/nonexistent_item/equip", json={"equipped": True})
+    assert r.status_code == 404
 
 
 def test_get_places(client):

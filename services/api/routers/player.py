@@ -1,5 +1,6 @@
 import json
 from fastapi import APIRouter, Request, HTTPException
+from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage
 
 router = APIRouter()
@@ -17,7 +18,9 @@ def get_player_profile(request: Request) -> dict:
     cat_rows = db.execute(
         "SELECT category, xp FROM player_category_xp WHERE character_id='player_default'"
     ).fetchall()
-    category_xp = {r["category"]: r["xp"] for r in cat_rows}
+    # All categories always present — bars in the HUD appear even with 0 XP
+    category_xp = {c.value: 0 for c in Category}
+    category_xp.update({r["category"]: r["xp"] for r in cat_rows})
     total_xp = get_total_xp(db, "player_default")
     level = compute_level(total_xp)
     stage = compute_evolution_stage(level)
