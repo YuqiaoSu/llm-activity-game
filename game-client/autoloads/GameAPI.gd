@@ -28,6 +28,11 @@ func fetch_notifications() -> void:
 
 
 func ack_notification(nid: String) -> void:
+    var re := RegEx.new()
+    re.compile("^[0-9a-fA-F\\-]{8,40}$")
+    if re.search(nid) == null:
+        push_error("GameAPI: invalid notification ID: %s" % nid)
+        return
     _http_post("/notifications/%s/ack" % nid, func(_code: int, _data: Dictionary) -> void:
         pass
     )
