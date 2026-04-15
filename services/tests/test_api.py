@@ -205,6 +205,40 @@ def test_get_stats(client):
     assert data["chunks_processed"] == 0
 
 
+def test_get_history_empty(client):
+    r = client.get("/history")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_get_history_after_poll(client, seeded_db, monkeypatch):
+    """After a poll that processes a chunk, /history returns that chunk's log entry."""
+    from services.sync_agent import tracker_client as tc_module
+    chunks = [{
+        "chunk_id": "hist_001", "label": "WORK", "duration_sec": 1800,
+        "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
+        "time_of_day": "morning",
+    }]
+    monkeypatch.setattr(
+        tc_module.TrackerClient,
+        "fetch_chunks",
+        lambda self, after_cursor, limit=50: (chunks, "hist_001"),
+    )
+    client.post("/sync/poll-now")
+
+    r = client.get("/history")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    entry = data[0]
+    assert entry["chunk_id"] == "hist_001"
+    assert entry["category"] == "WORK"
+    assert entry["xp_awarded"] == 30   # 1800 sec / 60 = 30 min × 1 XP/min
+    assert entry["duration_sec"] == 1800
+    assert "processed_at" in entry
+    assert "drops" in entry
+
+
 def test_poll_now_no_new_chunks(client, monkeypatch):
     from services.sync_agent import tracker_client as tc_module
     monkeypatch.setattr(

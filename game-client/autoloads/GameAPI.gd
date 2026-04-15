@@ -12,6 +12,7 @@ signal poll_completed(result: String)
 signal equip_updated(item_id: String, equipped: bool)
 signal places_updated(places: Array)
 signal stats_updated(data: Dictionary)
+signal history_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -53,6 +54,15 @@ func ack_notification(nid: String) -> void:
 func fetch_stats() -> void:
     _http_get("/stats", func(data: Dictionary) -> void:
         stats_updated.emit(data)
+    )
+
+
+func fetch_history() -> void:
+    _http_get("/history", func(data) -> void:
+        if data is Array:
+            history_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /history response is not an Array")
     )
 
 

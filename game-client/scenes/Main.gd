@@ -34,6 +34,9 @@ func _ready() -> void:
 	$VBox/Buttons/StatsButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Stats.tscn")
 	)
+	$VBox/Buttons/HistoryButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/History.tscn")
+	)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 

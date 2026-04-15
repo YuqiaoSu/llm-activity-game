@@ -10,7 +10,7 @@ def test_init_db_creates_all_tables():
     expected = {
         "sync_state", "item_definitions", "inventory", "reward_ledger",
         "pending_notifications", "player_profile", "player_category_xp",
-        "places", "place_slots", "place_active_effects",
+        "places", "place_slots", "place_active_effects", "chunk_log",
     }
     assert expected == tables
     conn.close()

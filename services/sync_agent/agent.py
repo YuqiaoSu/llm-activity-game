@@ -1,5 +1,6 @@
 from __future__ import annotations
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 from enum import Enum
 from services.contracts.chunk import Chunk
@@ -127,11 +128,27 @@ class SyncAgent:
             except ValueError:
                 continue  # unknown label — skip XP and drops
 
+            xp = xp_for_chunk(chunk)
             award_category_xp(
                 self.db,
                 character_id=self.character_id,
                 category=cat,
-                xp=xp_for_chunk(chunk),
+                xp=xp,
+            )
+            self.db.execute(
+                """
+                INSERT OR IGNORE INTO chunk_log
+                    (log_id, chunk_id, category, xp_awarded, duration_sec, processed_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()),
+                    chunk.chunk_id,
+                    cat.value,
+                    xp,
+                    chunk.duration_sec,
+                    datetime.now(timezone.utc).isoformat(),
+                ),
             )
             self.db.commit()
 

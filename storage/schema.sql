@@ -94,6 +94,16 @@ CREATE TABLE IF NOT EXISTS place_slots (
     metadata     TEXT NOT NULL DEFAULT '{}'
 );
 
+-- chunk_log: one row per processed tracker chunk — used for activity history screen
+CREATE TABLE IF NOT EXISTS chunk_log (
+    log_id        TEXT PRIMARY KEY,
+    chunk_id      TEXT NOT NULL UNIQUE,   -- idempotent; INSERT OR IGNORE on replay
+    category      TEXT NOT NULL,
+    xp_awarded    INTEGER NOT NULL,
+    duration_sec  INTEGER NOT NULL,
+    processed_at  TEXT NOT NULL
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,
