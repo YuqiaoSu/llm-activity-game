@@ -39,6 +39,9 @@ func _on_inventory(items: Array) -> void:
 
 
 func _make_card(item: Dictionary) -> Control:
+	var vbox := VBoxContainer.new()
+
+	# ── main row ─────────────────────────────────────────────────────────────
 	var hbox := HBoxContainer.new()
 
 	var dot := ColorRect.new()
@@ -69,4 +72,34 @@ func _make_card(item: Dictionary) -> Control:
 	hbox.add_child(qty_lbl)
 	hbox.add_child(cat_lbl)
 	hbox.add_child(equip_btn)
-	return hbox
+	vbox.add_child(hbox)
+
+	# ── effect summary row (only when slot effects present) ───────────────────
+	var effects: Array = item.get("effects", [])
+	var effect_text := _format_slot_effects(effects)
+	if effect_text != "":
+		var eff_lbl := Label.new()
+		eff_lbl.text = "  ✦ " + effect_text
+		eff_lbl.modulate = Color(0.85, 0.75, 0.35)   # warm gold
+		eff_lbl.add_theme_font_size_override("font_size", 11)
+		vbox.add_child(eff_lbl)
+
+	return vbox
+
+
+func _format_slot_effects(effects: Array) -> String:
+	var parts: Array[String] = []
+	for raw in effects:
+		if not raw is Dictionary:
+			continue
+		var eff := raw as Dictionary
+		match eff.get("effect_type", ""):
+			"xp_multiplier":
+				var f: float = eff.get("params", {}).get("factor", 1.0)
+				parts.append("%.1f× XP when placed" % f)
+			"drop_weight_mod":
+				var p: Dictionary = eff.get("params", {})
+				var f: float = p.get("factor", 1.0)
+				var r: String = str(p.get("rarity", "?")).capitalize()
+				parts.append("%.1f× %s drops when placed" % [f, r])
+	return ", ".join(parts)

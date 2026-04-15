@@ -75,8 +75,22 @@ func _make_card(place: Dictionary) -> Control:
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
 	var state_lbl := Label.new()
-	state_lbl.text = "Unlocked" if unlocked else "Locked"
-	state_lbl.modulate = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
+	if unlocked:
+		state_lbl.text = "Unlocked"
+		state_lbl.modulate = _COLOR_UNLOCKED
+	else:
+		var cond = place.get("unlock_condition", null)
+		if cond is Dictionary:
+			var ctype: String = (cond as Dictionary).get("condition_type", "")
+			var params: Dictionary = (cond as Dictionary).get("params", {}) as Dictionary
+			match ctype:
+				"player_level":
+					state_lbl.text = "Locked · Level %d required" % params.get("min_level", "?")
+				_:
+					state_lbl.text = "Locked"
+		else:
+			state_lbl.text = "Locked"
+		state_lbl.modulate = _COLOR_LOCKED
 
 	var type_lbl := Label.new()
 	type_lbl.text = str(place.get("place_type", "")).capitalize()
