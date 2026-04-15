@@ -26,6 +26,9 @@ func _ready() -> void:
 	$VBox/Buttons/InventoryButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Inventory.tscn")
 	)
+	$VBox/Buttons/PlacesButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Places.tscn")
+	)
 	GameAPI.fetch_profile()
 
 

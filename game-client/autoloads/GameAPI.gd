@@ -8,6 +8,7 @@ signal inventory_updated(items: Array)
 signal notifications_updated(notifs: Array)
 signal poll_completed(result: String)
 signal equip_updated(item_id: String, equipped: bool)
+signal places_updated(places: Array)
 
 
 func fetch_profile() -> void:
@@ -39,6 +40,15 @@ func ack_notification(nid: String) -> void:
         return
     _http_post("/notifications/%s/ack" % nid, func(_code: int, _data: Dictionary) -> void:
         pass
+    )
+
+
+func fetch_places() -> void:
+    _http_get("/places", func(data) -> void:
+        if data is Array:
+            places_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /places response is not an Array")
     )
 
 

@@ -57,3 +57,6 @@ text = "Check Rewards"
 
 [node name="InventoryButton" type="Button" parent="VBox/Buttons"]
 text = "Inventory →"
+
+[node name="PlacesButton" type="Button" parent="VBox/Buttons"]
+text = "Places →"
