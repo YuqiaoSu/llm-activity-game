@@ -83,6 +83,9 @@ def test_get_inventory(client):
     assert isinstance(items, list)
     assert len(items) == 1
     assert items[0]["item_id"] == "scroll_001"
+    assert items[0]["name"] == "Scroll"      # enriched from item_definitions JSON
+    assert items[0]["rarity"] == "COMMON"    # enriched from item_definitions JSON
+    assert items[0]["category"] == "WORK"    # enriched from item_definitions JSON
 
 
 def test_get_places(client):

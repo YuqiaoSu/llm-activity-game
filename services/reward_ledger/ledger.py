@@ -60,7 +60,9 @@ def record_drop(
     payload = json.dumps({
         "item_id": item.item_id,
         "instance_id": instance_id,
+        "item_name": item.name,
         "rarity": item.rarity.value,
+        "category": item.category.value,
     })
     conn.execute(
         """
