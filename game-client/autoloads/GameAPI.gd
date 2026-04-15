@@ -11,6 +11,7 @@ signal notifications_updated(notifs: Array)
 signal poll_completed(result: String)
 signal equip_updated(item_id: String, equipped: bool)
 signal places_updated(places: Array)
+signal stats_updated(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -46,6 +47,12 @@ func ack_notification(nid: String) -> void:
         return
     _http_post("/notifications/%s/ack" % nid, func(_code: int, _data: Dictionary) -> void:
         pass
+    )
+
+
+func fetch_stats() -> void:
+    _http_get("/stats", func(data: Dictionary) -> void:
+        stats_updated.emit(data)
     )
 
 

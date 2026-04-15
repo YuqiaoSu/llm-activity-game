@@ -9,6 +9,8 @@ extends Control
 @onready var _poll_status: Label              = $VBox/PollStatus
 @onready var _poll_button: Button             = $VBox/Buttons/PollButton
 
+var _is_polling: bool = false
+
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),  # 0 — Hatchling  (pale blue)
 	Color(0.50, 0.80, 0.50),  # 1 — Growing    (green)
@@ -29,6 +31,10 @@ func _ready() -> void:
 	$VBox/Buttons/PlacesButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Places.tscn")
 	)
+	$VBox/Buttons/StatsButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Stats.tscn")
+	)
+	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 
 
@@ -71,12 +77,23 @@ func _rebuild_xp_bars(category_xp: Dictionary) -> void:
 
 
 func _on_poll_pressed() -> void:
+	if _is_polling:
+		return
+	_is_polling = true
 	_poll_button.disabled = true
 	_poll_status.text = "Checking..."
 	GameAPI.poll_now()
 
 
+func _on_auto_poll_timeout() -> void:
+	if _is_polling:
+		return
+	_is_polling = true
+	GameAPI.poll_now()
+
+
 func _on_poll_result(result: String) -> void:
+	_is_polling = false
 	_poll_button.disabled = false
 	match result:
 		"OK":

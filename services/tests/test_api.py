@@ -184,6 +184,27 @@ def test_ack_nonexistent_notification(client):
     assert r.status_code == 404
 
 
+def test_get_stats(client):
+    r = client.get("/stats")
+    assert r.status_code == 200
+    data = r.json()
+    assert "total_xp" in data
+    assert "level" in data
+    assert "evolution_stage" in data
+    assert "category_xp" in data
+    assert "top_category" in data
+    assert "chunks_processed" in data
+    assert "drops_total" in data
+    assert "places_unlocked" in data
+    # Fixture seeds WORK XP — top_category must be WORK (only non-zero category)
+    assert data["top_category"] == "WORK"
+    # The fixture seeds one place in UNLOCKED state
+    assert data["places_unlocked"] == 1
+    # No drops were recorded in the fixture
+    assert data["drops_total"] == 0
+    assert data["chunks_processed"] == 0
+
+
 def test_poll_now_no_new_chunks(client, monkeypatch):
     from services.sync_agent import tracker_client as tc_module
     monkeypatch.setattr(

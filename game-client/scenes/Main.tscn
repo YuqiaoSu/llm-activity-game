@@ -60,3 +60,10 @@ text = "Inventory →"
 
 [node name="PlacesButton" type="Button" parent="VBox/Buttons"]
 text = "Places →"
+
+[node name="StatsButton" type="Button" parent="VBox/Buttons"]
+text = "Stats →"
+
+[node name="AutoPollTimer" type="Timer" parent="."]
+wait_time = 300.0
+autostart = true
