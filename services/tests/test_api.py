@@ -155,6 +155,44 @@ def test_get_place_not_found(client):
     assert r.status_code == 404
 
 
+def test_assign_item_to_slot(client, seeded_db):
+    r = client.put("/places/home_001/slots/s1", json={"instance_id": "inv_001"})
+    assert r.status_code == 200
+    place = r.json()
+    slot = next(s for s in place["slots"] if s["slot_id"] == "s1")
+    assert slot["occupant_id"] == "inv_001"
+    # inventory row should be updated
+    row = seeded_db.execute("SELECT placed_in FROM inventory WHERE instance_id='inv_001'").fetchone()
+    assert row["placed_in"] == "s1"
+
+
+def test_remove_item_from_slot(client, seeded_db):
+    # First assign
+    client.put("/places/home_001/slots/s1", json={"instance_id": "inv_001"})
+    # Then remove
+    r = client.put("/places/home_001/slots/s1", json={"instance_id": None})
+    assert r.status_code == 200
+    slot = next(s for s in r.json()["slots"] if s["slot_id"] == "s1")
+    assert slot["occupant_id"] is None
+    row = seeded_db.execute("SELECT placed_in FROM inventory WHERE instance_id='inv_001'").fetchone()
+    assert row["placed_in"] is None
+
+
+def test_assign_slot_item_not_in_inventory(client):
+    r = client.put("/places/home_001/slots/s1", json={"instance_id": "nonexistent_instance"})
+    assert r.status_code == 404
+
+
+def test_assign_slot_not_found(client):
+    r = client.put("/places/home_001/slots/no_such_slot", json={"instance_id": "inv_001"})
+    assert r.status_code == 404
+
+
+def test_assign_slot_place_not_matched(client):
+    r = client.put("/places/nonexistent_place/slots/s1", json={"instance_id": "inv_001"})
+    assert r.status_code == 404
+
+
 def test_get_pending_notifications_empty(client):
     r = client.get("/notifications/pending")
     assert r.status_code == 200

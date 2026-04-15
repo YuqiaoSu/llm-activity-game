@@ -81,6 +81,20 @@ func fetch_places() -> void:
     )
 
 
+signal slot_assigned(place: Dictionary)
+
+func assign_slot(place_id: String, slot_id: String, instance_id: Variant) -> void:
+    ## Assign or remove an item instance from a place slot.
+    ## Pass null for instance_id to remove the current occupant.
+    var body := JSON.stringify({"instance_id": instance_id})
+    _http_put("/places/%s/slots/%s" % [place_id, slot_id], body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            slot_assigned.emit(data)
+        else:
+            push_error("GameAPI: assign_slot %s/%s → %d" % [place_id, slot_id, code])
+    )
+
+
 func equip_item(item_id: String, equipped: bool) -> void:
     var body := JSON.stringify({"equipped": equipped})
     _http_patch("/inventory/%s/equip" % item_id, body, func(code: int, data: Dictionary) -> void:
@@ -143,6 +157,25 @@ func _http_patch(path: String, body: String, on_done: Callable) -> void:
     var err := http.request(BASE_URL + path, headers, HTTPClient.METHOD_PATCH, body)
     if err != OK:
         push_error("GameAPI: failed to start PATCH %s" % path)
+        http.queue_free()
+
+
+func _http_put(path: String, body: String, on_done: Callable) -> void:
+    var http := HTTPRequest.new()
+    add_child(http)
+    http.request_completed.connect(
+        func(result: int, code: int, _h: PackedStringArray, body_bytes: PackedByteArray) -> void:
+            http.queue_free()
+            if result != HTTPRequest.RESULT_SUCCESS:
+                push_error("GameAPI: network error on PUT %s" % path)
+                return
+            var parsed = JSON.parse_string(body_bytes.get_string_from_utf8())
+            on_done.call(code, parsed if parsed != null else {})
+    )
+    var headers := PackedStringArray(["Content-Type: application/json"])
+    var err := http.request(BASE_URL + path, headers, HTTPClient.METHOD_PUT, body)
+    if err != OK:
+        push_error("GameAPI: failed to start PUT %s" % path)
         http.queue_free()
 
 
