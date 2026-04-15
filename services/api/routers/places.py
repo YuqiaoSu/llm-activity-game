@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from services.place_service.service import get_place, list_places
@@ -10,11 +11,30 @@ class SlotAssignBody(BaseModel):
     instance_id: str | None  # None = remove occupant
 
 
+def _enrich_slots(db, place_dict: dict) -> dict:
+    """Add occupant_name to each slot that has an occupant_id."""
+    for slot in place_dict.get("slots", []):
+        occupant_id = slot.get("occupant_id")
+        if occupant_id is None:
+            slot["occupant_name"] = None
+            continue
+        row = db.execute(
+            """
+            SELECT json_extract(d.data, '$.name') AS name
+            FROM inventory i
+            JOIN item_definitions d ON i.item_id = d.item_id
+            WHERE i.instance_id = ?
+            """,
+            (occupant_id,),
+        ).fetchone()
+        slot["occupant_name"] = row["name"] if row else None
+    return place_dict
+
+
 @router.get("")
 def get_places(request: Request) -> list[dict]:
     db = request.app.state.db
-    places = list_places(db)
-    return [p.model_dump() for p in places]
+    return [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
 
 
 @router.get("/{place_id}")
@@ -23,7 +43,7 @@ def get_place_by_id(place_id: str, request: Request) -> dict:
     place = get_place(db, place_id)
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    return place.model_dump()
+    return _enrich_slots(db, place.model_dump())
 
 
 @router.put("/{place_id}/slots/{slot_id}")

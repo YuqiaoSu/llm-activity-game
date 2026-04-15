@@ -6,65 +6,228 @@ extends Control
 
 const _COLOR_UNLOCKED := Color(0.3, 0.8, 0.3)
 const _COLOR_LOCKED   := Color(0.5, 0.5, 0.5)
+const _COLOR_SLOT_EMPTY  := Color(0.55, 0.55, 0.55)
+const _COLOR_SLOT_FILLED := Color(0.9, 0.75, 0.2)
+
+# Inventory cache keyed by item_id — populated when first needed
+var _inventory: Array[Dictionary] = []
 
 
 func _ready() -> void:
-    $VBox/Header/BackButton.pressed.connect(func() -> void:
-        get_tree().change_scene_to_file("res://scenes/Main.tscn")
-    )
-    GameAPI.places_updated.connect(_on_places)
-    GameAPI.fetch_places()
+	$VBox/Header/BackButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Main.tscn")
+	)
+	GameAPI.places_updated.connect(_on_places)
+	GameAPI.inventory_updated.connect(_on_inventory_cache)
+	GameAPI.slot_assigned.connect(_on_slot_assigned)
+	GameAPI.fetch_places()
+	# Pre-load inventory so the slot picker is ready without a round-trip delay
+	GameAPI.fetch_inventory()
 
 
 func _exit_tree() -> void:
-    if GameAPI.places_updated.is_connected(_on_places):
-        GameAPI.places_updated.disconnect(_on_places)
+	if GameAPI.places_updated.is_connected(_on_places):
+		GameAPI.places_updated.disconnect(_on_places)
+	if GameAPI.inventory_updated.is_connected(_on_inventory_cache):
+		GameAPI.inventory_updated.disconnect(_on_inventory_cache)
+	if GameAPI.slot_assigned.is_connected(_on_slot_assigned):
+		GameAPI.slot_assigned.disconnect(_on_slot_assigned)
+
+
+func _on_inventory_cache(items: Array) -> void:
+	_inventory = []
+	for raw in items:
+		if raw is Dictionary:
+			_inventory.append(raw as Dictionary)
+
+
+func _on_slot_assigned(_place: Dictionary) -> void:
+	# Refresh both places and inventory after any slot change
+	GameAPI.fetch_places()
+	GameAPI.fetch_inventory()
 
 
 func _on_places(places: Array) -> void:
-    _count_label.text = "Places (%d)" % places.size()
-    for child in _place_list.get_children():
-        child.queue_free()
-    for raw in places:
-        if not raw is Dictionary:
-            push_warning("Places: skipping non-Dictionary entry: %s" % str(raw))
-            continue
-        _place_list.add_child(_make_card(raw as Dictionary))
+	_count_label.text = "Places (%d)" % places.size()
+	for child in _place_list.get_children():
+		child.queue_free()
+	for raw in places:
+		if not raw is Dictionary:
+			push_warning("Places: skipping non-Dictionary entry: %s" % str(raw))
+			continue
+		_place_list.add_child(_make_card(raw as Dictionary))
 
 
 func _make_card(place: Dictionary) -> Control:
-    var unlocked: bool = place.get("state", "LOCKED") == "UNLOCKED"
+	var unlocked: bool = place.get("state", "LOCKED") == "UNLOCKED"
 
-    var hbox := HBoxContainer.new()
+	var vbox := VBoxContainer.new()
 
-    var dot := ColorRect.new()
-    dot.custom_minimum_size = Vector2(14, 14)
-    dot.color = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
+	# ── header row ──────────────────────────────────────────────────────────
+	var hbox := HBoxContainer.new()
 
-    var name_lbl := Label.new()
-    name_lbl.text = place.get("name", place.get("place_id", "?"))
-    name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var dot := ColorRect.new()
+	dot.custom_minimum_size = Vector2(14, 14)
+	dot.color = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
 
-    var state_lbl := Label.new()
-    state_lbl.text = "Unlocked" if unlocked else "Locked"
-    state_lbl.modulate = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
+	var name_lbl := Label.new()
+	name_lbl.text = place.get("name", place.get("place_id", "?"))
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 
-    var type_lbl := Label.new()
-    type_lbl.text = str(place.get("place_type", "")).capitalize()
+	var state_lbl := Label.new()
+	state_lbl.text = "Unlocked" if unlocked else "Locked"
+	state_lbl.modulate = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
 
-    var pool = place.get("item_pool", {})
-    var cats = pool.get("allowed_categories", null) if pool is Dictionary else null
-    var cats_lbl := Label.new()
-    if cats is Array and (cats as Array).size() > 0:
-        cats_lbl.text = " · ".join((cats as Array).map(
-            func(c: Variant) -> String: return str(c).capitalize()
-        ))
-    else:
-        cats_lbl.text = "All categories"
+	var type_lbl := Label.new()
+	type_lbl.text = str(place.get("place_type", "")).capitalize()
 
-    hbox.add_child(dot)
-    hbox.add_child(name_lbl)
-    hbox.add_child(state_lbl)
-    hbox.add_child(type_lbl)
-    hbox.add_child(cats_lbl)
-    return hbox
+	var pool = place.get("item_pool", {})
+	var cats = pool.get("allowed_categories", null) if pool is Dictionary else null
+	var cats_lbl := Label.new()
+	if cats is Array and (cats as Array).size() > 0:
+		cats_lbl.text = " · ".join((cats as Array).map(
+			func(c: Variant) -> String: return str(c).capitalize()
+		))
+	else:
+		cats_lbl.text = "All categories"
+
+	hbox.add_child(dot)
+	hbox.add_child(name_lbl)
+	hbox.add_child(state_lbl)
+	hbox.add_child(type_lbl)
+	hbox.add_child(cats_lbl)
+	vbox.add_child(hbox)
+
+	# ── slot rows (only for unlocked places with slots) ─────────────────────
+	var slots: Array = place.get("slots", [])
+	if unlocked and slots.size() > 0:
+		var sep := HSeparator.new()
+		sep.modulate = Color(1, 1, 1, 0.15)
+		vbox.add_child(sep)
+		for raw_slot in slots:
+			if raw_slot is Dictionary:
+				vbox.add_child(_make_slot_row(place, raw_slot as Dictionary))
+
+	# ── separator at card bottom ─────────────────────────────────────────────
+	var bottom_sep := HSeparator.new()
+	vbox.add_child(bottom_sep)
+	return vbox
+
+
+func _make_slot_row(place: Dictionary, slot: Dictionary) -> Control:
+	var place_id: String = place.get("place_id", "")
+	var slot_id: String  = slot.get("slot_id", "")
+	var occupant_id      = slot.get("occupant_id", null)  # Variant: String or null
+
+	var row := VBoxContainer.new()
+
+	# ── slot header ──────────────────────────────────────────────────────────
+	var hbox := HBoxContainer.new()
+
+	var dot := ColorRect.new()
+	dot.custom_minimum_size = Vector2(10, 10)
+	dot.color = _COLOR_SLOT_FILLED if occupant_id != null else _COLOR_SLOT_EMPTY
+
+	var slot_lbl := Label.new()
+	slot_lbl.text = "  Slot [%s]" % str(slot.get("slot_type", "ITEM")).capitalize()
+	slot_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	var occupant_lbl := Label.new()
+	if occupant_id != null:
+		var oname = slot.get("occupant_name", null)
+		occupant_lbl.text = str(oname) if oname != null else "(item %s)" % str(occupant_id).left(8)
+		occupant_lbl.modulate = _COLOR_SLOT_FILLED
+	else:
+		occupant_lbl.text = "(empty)"
+		occupant_lbl.modulate = _COLOR_SLOT_EMPTY
+
+	hbox.add_child(dot)
+	hbox.add_child(slot_lbl)
+	hbox.add_child(occupant_lbl)
+	row.add_child(hbox)
+
+	# ── action buttons ───────────────────────────────────────────────────────
+	var btn_row := HBoxContainer.new()
+
+	if occupant_id != null:
+		var remove_btn := Button.new()
+		remove_btn.text = "Remove"
+		remove_btn.pressed.connect(func() -> void:
+			GameAPI.assign_slot(place_id, slot_id, null)
+		)
+		btn_row.add_child(remove_btn)
+	else:
+		var assign_btn := Button.new()
+		assign_btn.text = "Assign Item ▾"
+		# picker_box is created lazily and toggled on button press
+		var picker_box := VBoxContainer.new()
+		picker_box.visible = false
+		assign_btn.pressed.connect(func() -> void:
+			picker_box.visible = not picker_box.visible
+			if picker_box.visible:
+				_populate_picker(picker_box, place_id, slot_id)
+		)
+		btn_row.add_child(assign_btn)
+		row.add_child(btn_row)
+		row.add_child(picker_box)
+		return row
+
+	row.add_child(btn_row)
+	return row
+
+
+func _populate_picker(picker: VBoxContainer, place_id: String, slot_id: String) -> void:
+	for child in picker.get_children():
+		child.queue_free()
+
+	if _inventory.is_empty():
+		var lbl := Label.new()
+		lbl.text = "  (inventory empty)"
+		picker.add_child(lbl)
+		return
+
+	var added := 0
+	for item in _inventory:
+		var iid = item.get("available_instance_id", null)
+		if iid == null:
+			continue  # all copies are already placed
+		var effects: Array = item.get("effects", [])
+		var effect_summary := _format_effects(effects)
+		var btn := Button.new()
+		var label_text: String = "  %s [%s]" % [
+			item.get("name", item.get("item_id", "?")),
+			item.get("rarity", "?")
+		]
+		if effect_summary != "":
+			label_text += "  · " + effect_summary
+		btn.text = label_text
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		var instance_id: String = str(iid)
+		btn.pressed.connect(func() -> void:
+			GameAPI.assign_slot(place_id, slot_id, instance_id)
+			picker.visible = false
+		)
+		picker.add_child(btn)
+		added += 1
+
+	if added == 0:
+		var lbl := Label.new()
+		lbl.text = "  (no unplaced items available)"
+		picker.add_child(lbl)
+
+
+func _format_effects(effects: Array) -> String:
+	var parts: Array[String] = []
+	for eff in effects:
+		if not eff is Dictionary:
+			continue
+		match (eff as Dictionary).get("effect_type", ""):
+			"xp_multiplier":
+				var f: float = (eff as Dictionary).get("params", {}).get("factor", 1.0)
+				parts.append("%.1f× XP" % f)
+			"drop_weight_mod":
+				var p: Dictionary = (eff as Dictionary).get("params", {})
+				var f: float = p.get("factor", 1.0)
+				var r: String = str(p.get("rarity", "?"))
+				parts.append("%.1f× %s drops" % [f, r.capitalize()])
+	return ", ".join(parts)

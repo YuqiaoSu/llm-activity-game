@@ -103,6 +103,8 @@ def test_get_inventory(client):
     assert item["rarity"] == "COMMON"        # enriched from item_definitions JSON
     assert item["category"] == "WORK"        # enriched from item_definitions JSON
     assert "instance_id" not in item         # grouped response, no per-instance id
+    assert item["available_instance_id"] == "inv_001"  # unplaced instance
+    assert isinstance(item["effects"], list)            # effects parsed from JSON
 
 
 def test_equip_item(client, seeded_db):
@@ -153,6 +155,22 @@ def test_get_place_by_id(client):
 def test_get_place_not_found(client):
     r = client.get("/places/nonexistent")
     assert r.status_code == 404
+
+
+def test_get_places_includes_occupant_name(client, seeded_db):
+    """Slot occupant_name is None when slot is empty, resolved name when filled."""
+    r = client.get("/places/home_001")
+    assert r.status_code == 200
+    slot = r.json()["slots"][0]
+    assert slot["occupant_id"] is None
+    assert slot["occupant_name"] is None
+
+    # Fill the slot and check name is resolved
+    client.put("/places/home_001/slots/s1", json={"instance_id": "inv_001"})
+    r2 = client.get("/places/home_001")
+    slot2 = r2.json()["slots"][0]
+    assert slot2["occupant_id"] == "inv_001"
+    assert slot2["occupant_name"] == "Scroll"
 
 
 def test_assign_item_to_slot(client, seeded_db):
