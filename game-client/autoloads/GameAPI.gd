@@ -7,6 +7,7 @@ signal profile_updated(data: Dictionary)
 signal inventory_updated(items: Array)
 signal notifications_updated(notifs: Array)
 signal poll_completed(result: String)
+signal equip_updated(item_id: String, equipped: bool)
 
 
 func fetch_profile() -> void:
@@ -38,6 +39,16 @@ func ack_notification(nid: String) -> void:
         return
     _http_post("/notifications/%s/ack" % nid, func(_code: int, _data: Dictionary) -> void:
         pass
+    )
+
+
+func equip_item(item_id: String, equipped: bool) -> void:
+    var body := JSON.stringify({"equipped": equipped})
+    _http_patch("/inventory/%s/equip" % item_id, body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            equip_updated.emit(item_id, data.get("equipped", equipped))
+        else:
+            push_error("GameAPI: equip %s → %d" % [item_id, code])
     )
 
 
@@ -74,6 +85,25 @@ func _http_get(path: String, on_done: Callable) -> void:
     var err := http.request(BASE_URL + path)
     if err != OK:
         push_error("GameAPI: failed to start GET %s" % path)
+        http.queue_free()
+
+
+func _http_patch(path: String, body: String, on_done: Callable) -> void:
+    var http := HTTPRequest.new()
+    add_child(http)
+    http.request_completed.connect(
+        func(result: int, code: int, _h: PackedStringArray, body_bytes: PackedByteArray) -> void:
+            http.queue_free()
+            if result != HTTPRequest.RESULT_SUCCESS:
+                push_error("GameAPI: network error on PATCH %s" % path)
+                return
+            var parsed = JSON.parse_string(body_bytes.get_string_from_utf8())
+            on_done.call(code, parsed if parsed != null else {})
+    )
+    var headers := PackedStringArray(["Content-Type: application/json"])
+    var err := http.request(BASE_URL + path, headers, HTTPClient.METHOD_PATCH, body)
+    if err != OK:
+        push_error("GameAPI: failed to start PATCH %s" % path)
         http.queue_free()
 
 
