@@ -36,7 +36,19 @@ func _display(notif: Dictionary) -> void:
 	_item_name.text = payload.get("item_name", payload.get("item_id", "Unknown Item"))
 	_rarity_label.text = rarity
 	_rarity_bar.color = RarityColor.for_rarity(rarity)
+	# Reset bar to zero-width so the tween grows it in from the left
+	_rarity_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_rarity_bar.custom_minimum_size.x = 0
 	_panel.visible = true
+	# Wait one frame so the layout pass completes, then animate
+	await get_tree().process_frame
+	_animate_rarity_bar()
+
+
+func _animate_rarity_bar() -> void:
+	var target_width: float = (_rarity_bar.get_parent() as Control).size.x
+	var tween := create_tween()
+	tween.tween_property(_rarity_bar, "custom_minimum_size:x", target_width, 0.4).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUART)
 
 
 func _on_ok() -> void:
