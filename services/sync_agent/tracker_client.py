@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import random
+import time
 from datetime import datetime
 
 import httpx
@@ -28,10 +30,48 @@ class TrackerClient:
       chunk_start hour      → time_of_day
 
     Cursor is a chunk_end ISO timestamp. Pass None on first poll.
+
+    Retries up to `max_retries` times on connection errors, timeouts, and
+    HTTP 503 responses using exponential back-off with ±25 % jitter.
     """
 
-    def __init__(self, base_url: str = "http://localhost:52395") -> None:
+    _RETRYABLE_STATUS = {503, 429}
+    _MAX_BACKOFF_SEC = 30.0
+
+    def __init__(
+        self,
+        base_url: str = "http://localhost:52395",
+        max_retries: int = 3,
+        retry_base_delay: float = 1.0,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.max_retries = max_retries
+        self.retry_base_delay = retry_base_delay
+
+    def _get_with_retry(self, url: str, params: dict) -> httpx.Response:
+        """GET with exponential back-off on transient failures."""
+        last_exc: Exception = httpx.HTTPError("max retries exceeded")
+        for attempt in range(self.max_retries + 1):
+            if attempt > 0:
+                base = self.retry_base_delay * (2 ** (attempt - 1))
+                delay = min(base, self._MAX_BACKOFF_SEC)
+                delay += random.uniform(0, delay * 0.25)
+                time.sleep(delay)
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    response = client.get(url, params=params)
+                if response.status_code in self._RETRYABLE_STATUS:
+                    last_exc = httpx.HTTPStatusError(
+                        f"HTTP {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
+                    continue
+                response.raise_for_status()
+                return response
+            except (httpx.TransportError, httpx.TimeoutException) as exc:
+                last_exc = exc
+        raise last_exc
 
     def fetch_chunks(
         self,
@@ -48,10 +88,8 @@ class TrackerClient:
         if after_cursor:
             params["started_after"] = after_cursor
 
-        with httpx.Client(timeout=10.0) as client:
-            response = client.get(f"{self.base_url}/api/chunks", params=params)
-            response.raise_for_status()
-            raw: list[dict] = response.json()
+        response = self._get_with_retry(f"{self.base_url}/api/chunks", params=params)
+        raw: list[dict] = response.json()
 
         if not isinstance(raw, list):
             return [], None
