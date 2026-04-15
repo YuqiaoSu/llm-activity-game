@@ -1,5 +1,5 @@
-import sqlite3
 import json
+import sqlite3
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
@@ -44,6 +44,26 @@ def db():
     conn.close()
 
 
+def _make_agent(
+    db: sqlite3.Connection,
+    chunks: list[dict],
+    cursor: str | None,
+    **agent_kwargs,
+) -> SyncAgent:
+    """Build a SyncAgent with a pre-configured mock TrackerClient."""
+    mock_client = MagicMock(spec=TrackerClient)
+    mock_client.fetch_chunks.return_value = (chunks, cursor)
+    return SyncAgent(
+        db=db,
+        tracker_client=mock_client,
+        character_id="player_default",
+        strategy=SessionStrategy(),
+        **agent_kwargs,
+    )
+
+
+# ── rate limiter ──────────────────────────────────────────────────────────────
+
 def test_rate_limiter_allows_first_call():
     rl = RateLimiter(cooldown_sec=60)
     assert rl.can_trigger("p1") is True
@@ -62,6 +82,8 @@ def test_rate_limiter_allows_after_cooldown():
     assert rl.can_trigger("p1") is True
 
 
+# ── poll results ──────────────────────────────────────────────────────────────
+
 def test_sync_agent_poll_processes_chunks(db):
     chunks = [
         {
@@ -70,16 +92,7 @@ def test_sync_agent_poll_processes_chunks(db):
             "time_of_day": "morning",
         }
     ]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_001")
-
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-    )
-    result = agent.poll()
+    result = _make_agent(db, chunks, "c_001").poll()
     assert result == PollResult.OK
 
     # SessionStrategy gives 1 roll; WORK item matches WORK chunk → always 1 drop
@@ -89,19 +102,9 @@ def test_sync_agent_poll_processes_chunks(db):
 
 
 def test_sync_agent_poll_on_cooldown_returns_cooldown(db):
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = ([], None)
     rl = RateLimiter(cooldown_sec=3600)
     rl.record_trigger("player_default")
-
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-        rate_limiter=rl,
-    )
-    result = agent.poll(manual=True)
+    result = _make_agent(db, [], None, rate_limiter=rl).poll(manual=True)
     assert result == PollResult.ON_COOLDOWN
 
 
@@ -112,16 +115,7 @@ def test_sync_agent_poll_advances_cursor(db):
             "confidence": 0.88, "started_at": "2026-04-14T20:00:00+00:00",
         }
     ]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_001")
-
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-    )
-    agent.poll()
+    _make_agent(db, chunks, "c_001").poll()
     cursor = db.execute(
         "SELECT last_cursor FROM sync_state WHERE player_id='default'"
     ).fetchone()["last_cursor"]
@@ -129,15 +123,7 @@ def test_sync_agent_poll_advances_cursor(db):
 
 
 def test_sync_agent_poll_no_chunks_returns_no_new_chunks(db):
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = ([], None)
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-    )
-    result = agent.poll()
+    result = _make_agent(db, [], None).poll()
     assert result == PollResult.NO_NEW_CHUNKS
 
 
@@ -148,16 +134,7 @@ def test_sync_agent_skips_low_confidence_chunk(db):
             "confidence": 0.1, "started_at": "2026-04-14T09:00:00+00:00",
         }
     ]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_low")
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-        min_confidence=0.5,
-    )
-    agent.poll()
+    _make_agent(db, chunks, "c_low", min_confidence=0.5).poll()
     ledger = db.execute("SELECT * FROM reward_ledger").fetchall()
     assert len(ledger) == 0
 
@@ -169,15 +146,16 @@ def test_sync_agent_poll_handles_unknown_label(db):
         "duration_sec": 900, "confidence": 0.8,
         "started_at": "2026-04-14T10:00:00+00:00",
     }]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_bogus")
-    agent = SyncAgent(db=db, tracker_client=mock_client, character_id="player_default")
-    result = agent.poll()
+    result = _make_agent(db, chunks, "c_bogus").poll()
     assert result == PollResult.OK   # must not raise
     # No XP should be awarded for an unknown label
-    rows = db.execute("SELECT * FROM player_category_xp WHERE character_id='player_default'").fetchall()
+    rows = db.execute(
+        "SELECT * FROM player_category_xp WHERE character_id='player_default'"
+    ).fetchall()
     assert len(rows) == 0
 
+
+# ── level-up & unlock notifications ──────────────────────────────────────────
 
 def test_sync_agent_level_up_notification_emitted(db):
     """A LEVEL_UP notification is created when XP crosses a level threshold.
@@ -190,21 +168,13 @@ def test_sync_agent_level_up_notification_emitted(db):
         "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
         "time_of_day": "morning",
     }]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_levelup")
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-    )
-    agent.poll()
+    _make_agent(db, chunks, "c_levelup").poll()
 
     notifications = db.execute(
-        "SELECT * FROM pending_notifications WHERE character_id='player_default' AND event_type='level_up'"
+        "SELECT * FROM pending_notifications "
+        "WHERE character_id='player_default' AND event_type='level_up'"
     ).fetchall()
     assert len(notifications) == 1
-    import json
     payload = json.loads(notifications[0]["payload"])
     assert payload["new_level"] == 2
 
@@ -217,22 +187,13 @@ def test_sync_agent_multiple_level_ups_in_one_poll(db):
         "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
         "time_of_day": "morning",
     }]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_multi")
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-    )
-    agent.poll()
+    _make_agent(db, chunks, "c_multi").poll()
 
     notifications = db.execute(
         "SELECT payload FROM pending_notifications "
         "WHERE character_id='player_default' AND event_type='level_up' "
         "ORDER BY created_at ASC"
     ).fetchall()
-    import json
     levels = [json.loads(n["payload"])["new_level"] for n in notifications]
     assert levels == [2, 3]
 
@@ -254,15 +215,7 @@ def test_sync_agent_place_unlock_triggered_on_level_up(db):
         "confidence": 0.9, "started_at": "2026-04-14T09:00:00+00:00",
         "time_of_day": "morning",
     }]
-    mock_client = MagicMock(spec=TrackerClient)
-    mock_client.fetch_chunks.return_value = (chunks, "c_unlock")
-    agent = SyncAgent(
-        db=db,
-        tracker_client=mock_client,
-        character_id="player_default",
-        strategy=SessionStrategy(),
-    )
-    agent.poll()
+    _make_agent(db, chunks, "c_unlock").poll()
 
     # Place should now be UNLOCKED
     row = db.execute("SELECT state FROM places WHERE place_id='cave_001'").fetchone()
