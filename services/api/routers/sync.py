@@ -1,7 +1,5 @@
 import httpx
 from fastapi import APIRouter, Request, HTTPException
-from services.sync_agent.agent import SyncAgent, PollResult
-from services.sync_agent.tracker_client import TrackerClient
 
 router = APIRouter()
 
@@ -17,14 +15,8 @@ def get_sync_status(request: Request) -> dict:
 
 @router.post("/poll-now")
 def poll_now(request: Request) -> dict:
-    db = request.app.state.db
-    agent = SyncAgent(
-        db=db,
-        tracker_client=TrackerClient(),
-        character_id="player_default",
-    )
     try:
-        result = agent.poll(manual=True)
+        result = request.app.state.sync_agent.poll(manual=True)
     except httpx.HTTPError:
         raise HTTPException(status_code=503, detail="Tracker unavailable")
     return {"result": result.value}

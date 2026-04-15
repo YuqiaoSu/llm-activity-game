@@ -76,7 +76,12 @@ class TrackerClient:
                 "time_of_day": _hour_to_time_of_day(hour),
             })
 
-        # Cursor = chunk_end of the newest chunk (last item before reversal = index 0 after reversal... wait)
-        # raw is reversed, so raw[-1] is the newest chunk (highest chunk_start)
-        new_cursor = str(raw[-1].get("chunk_end") or "") if raw else None
+        # Cursor = chunk_end of the newest chunk (raw[-1] after reversal = was raw[0] = newest).
+        # Guard: only emit a cursor when chunk_end is a non-empty string so we never
+        # save "" and accidentally cause the next poll to re-fetch all chunks.
+        new_cursor: str | None = None
+        if raw:
+            candidate = str(raw[-1].get("chunk_end") or "").strip()
+            if candidate:
+                new_cursor = candidate
         return result, new_cursor
