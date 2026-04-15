@@ -29,6 +29,13 @@ func _ready() -> void:
 	GameAPI.fetch_profile()
 
 
+func _exit_tree() -> void:
+	if GameAPI.profile_updated.is_connected(_on_profile):
+		GameAPI.profile_updated.disconnect(_on_profile)
+	if GameAPI.poll_completed.is_connected(_on_poll_result):
+		GameAPI.poll_completed.disconnect(_on_poll_result)
+
+
 func _on_profile(data: Dictionary) -> void:
 	var stage := mini(data.get("evolution_stage", 0) as int, _STAGE_COLORS.size() - 1)
 	_companion_rect.color = _STAGE_COLORS[stage]
@@ -48,7 +55,11 @@ func _rebuild_xp_bars(category_xp: Dictionary) -> void:
 		lbl.custom_minimum_size.x = 80
 		var bar := ProgressBar.new()
 		bar.max_value = _MAX_XP_PER_CAT
-		bar.value = category_xp[category] as int
+		var raw = category_xp[category]
+		if not (raw is int or raw is float):
+			push_warning("Main: unexpected XP type for '%s'" % category)
+			continue
+		bar.value = int(raw)
 		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bar.show_percentage = false
 		hbox.add_child(lbl)
