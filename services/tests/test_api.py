@@ -205,6 +205,25 @@ def test_get_stats(client):
     assert data["chunks_processed"] == 0
 
 
+def test_ack_all_notifications(client, seeded_db):
+    import uuid
+    for i in range(3):
+        seeded_db.execute(
+            "INSERT INTO pending_notifications "
+            "(notification_id, character_id, event_type, payload, created_at) "
+            "VALUES (?, 'player_default', 'item_drop', '{}', '2026-04-14T00:00:00+00:00')",
+            (str(uuid.uuid4()),),
+        )
+    seeded_db.commit()
+    r = client.post("/notifications/ack-all")
+    assert r.status_code == 200
+    assert r.json()["acknowledged_count"] == 3
+    remaining = seeded_db.execute(
+        "SELECT COUNT(*) FROM pending_notifications WHERE acknowledged=0"
+    ).fetchone()[0]
+    assert remaining == 0
+
+
 def test_get_history_empty(client):
     r = client.get("/history")
     assert r.status_code == 200

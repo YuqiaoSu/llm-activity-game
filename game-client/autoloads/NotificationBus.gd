@@ -7,8 +7,12 @@ signal place_unlocked(notification: Dictionary)
 
 const POLL_INTERVAL_SEC := 3.0
 const MAX_SEEN_IDS := 200
+# If more than this many notifications are pending on startup, bulk-ack them
+# rather than flooding the overlay with a backlog the player never saw in-game.
+const CATCHUP_THRESHOLD := 20
 
 var _seen_ids: Dictionary = {}
+var _catchup_done: bool = false
 
 
 func _ready() -> void:
@@ -21,6 +25,14 @@ func _ready() -> void:
 
 
 func _on_notifications(notifs: Array) -> void:
+	# First fetch: if there's a large historical backlog, bulk-ack it silently
+	# so the player isn't greeted by 50+ popups they never experienced in-game.
+	if not _catchup_done:
+		_catchup_done = true
+		if notifs.size() > CATCHUP_THRESHOLD:
+			GameAPI.ack_all_notifications()
+			return   # skip emitting any signals; next poll will be clean
+
 	for notif: Dictionary in notifs:
 		var nid: String = notif.get("notification_id", "")
 		if nid.is_empty() or _seen_ids.has(nid):

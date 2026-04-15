@@ -22,3 +22,18 @@ def ack_notification(notification_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Notification not found")
     db.commit()
     return {"acknowledged": True}
+
+
+@router.post("/ack-all")
+def ack_all_notifications(request: Request) -> dict:
+    """Mark all pending notifications for the default player as acknowledged.
+
+    Called on first launch to avoid flooding the overlay with historical drops.
+    """
+    db = request.app.state.db
+    result = db.execute(
+        "UPDATE pending_notifications SET acknowledged=1 "
+        "WHERE character_id='player_default' AND acknowledged=0"
+    )
+    db.commit()
+    return {"acknowledged_count": result.rowcount}

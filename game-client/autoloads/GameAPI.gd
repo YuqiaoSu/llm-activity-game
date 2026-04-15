@@ -40,6 +40,12 @@ func fetch_notifications() -> void:
     )
 
 
+func ack_all_notifications() -> void:
+    _http_post("/notifications/ack-all", func(_code: int, _data: Dictionary) -> void:
+        pass
+    )
+
+
 func ack_notification(nid: String) -> void:
     var re := RegEx.new()
     re.compile("^[0-9a-fA-F\\-]{8,40}$")
