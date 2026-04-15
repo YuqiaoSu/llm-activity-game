@@ -228,3 +228,61 @@ def test_sync_agent_place_unlock_triggered_on_level_up(db):
     ).fetchone()
     assert notif is not None
     assert json.loads(notif["payload"])["place_id"] == "cave_001"
+
+
+# ── active effect helpers ──────────────────────────────────────────────────
+
+def test_aggregate_drop_mods_empty():
+    assert SyncAgent._aggregate_drop_mods([]) == {}
+
+
+def test_aggregate_drop_mods_single():
+    from services.models.item import Effect
+    effects = [Effect(effect_type="drop_weight_mod", target="", params={"rarity": "RARE", "factor": 2.0})]
+    mods = SyncAgent._aggregate_drop_mods(effects)
+    assert mods == {"RARE": 2.0}
+
+
+def test_aggregate_drop_mods_stacks_multiplicatively():
+    from services.models.item import Effect
+    effects = [
+        Effect(effect_type="drop_weight_mod", target="", params={"rarity": "RARE", "factor": 2.0}),
+        Effect(effect_type="drop_weight_mod", target="", params={"rarity": "RARE", "factor": 3.0}),
+    ]
+    mods = SyncAgent._aggregate_drop_mods(effects)
+    assert mods == {"RARE": 6.0}
+
+
+def test_aggregate_xp_multiplier_empty():
+    assert SyncAgent._aggregate_xp_multiplier([]) == pytest.approx(1.0)
+
+
+def test_aggregate_xp_multiplier_applies():
+    from services.models.item import Effect
+    effects = [Effect(effect_type="xp_multiplier", target="", params={"factor": 2.0})]
+    assert SyncAgent._aggregate_xp_multiplier(effects) == pytest.approx(2.0)
+
+
+def test_xp_multiplier_applied_during_poll(db):
+    """A 2× XP multiplier effect doubles the XP awarded for a chunk."""
+    import uuid
+    # Insert an active xp_multiplier effect directly
+    db.execute(
+        "INSERT INTO place_active_effects "
+        "(effect_id, place_id, source_slot_id, effect_type, params, applied_at) "
+        "VALUES (?, 'home_001', 's1', 'xp_multiplier', ?, ?)",
+        (str(uuid.uuid4()), json.dumps({"factor": 2.0}), "2026-04-15T00:00:00+00:00"),
+    )
+    db.commit()
+
+    chunks = [{"chunk_id": "xp_mul_001", "label": "WORK", "duration_sec": 600,
+               "confidence": 0.9, "started_at": "2026-04-15T10:00:00+00:00", "time_of_day": "morning"}]
+    agent = _make_agent(db, chunks, "xp_mul_001")
+    agent.poll()
+
+    row = db.execute(
+        "SELECT xp_awarded FROM chunk_log WHERE chunk_id='xp_mul_001'"
+    ).fetchone()
+    # 600 sec = 10 min × 1 XP/min × 2× multiplier = 20 XP
+    assert row is not None
+    assert row["xp_awarded"] == 20

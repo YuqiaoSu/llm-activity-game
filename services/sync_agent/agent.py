@@ -14,6 +14,7 @@ from services.progression.xp import award_category_xp, xp_for_chunk, get_total_x
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
 from services.place_service.service import list_places, check_unlock_condition
+from services.place_service.effects import load_active_effects
 
 
 class PollResult(str, Enum):
@@ -78,6 +79,29 @@ class SyncAgent:
         ).fetchone()
         return row["luck"] if row else 5
 
+    @staticmethod
+    def _aggregate_drop_mods(effects: list) -> dict[str, float]:
+        """Fold drop_weight_mod effects into a {rarity_string: multiplier} dict.
+
+        Multiple effects for the same rarity multiply together.
+        """
+        mods: dict[str, float] = {}
+        for effect in effects:
+            if effect.effect_type == "drop_weight_mod":
+                rarity = effect.params.get("rarity", "")
+                factor = float(effect.params.get("factor", 1.0))
+                mods[rarity] = mods.get(rarity, 1.0) * factor
+        return mods
+
+    @staticmethod
+    def _aggregate_xp_multiplier(effects: list) -> float:
+        """Multiply all xp_multiplier effects together. Returns 1.0 if none present."""
+        multiplier = 1.0
+        for effect in effects:
+            if effect.effect_type == "xp_multiplier":
+                multiplier *= float(effect.params.get("factor", 1.0))
+        return multiplier
+
     def _check_place_unlocks(self, player_level: int) -> None:
         """Unlock any LOCKED places whose condition is now met and notify the player."""
         places = list_places(self.db)
@@ -112,6 +136,9 @@ class SyncAgent:
         catalogue = self._load_catalogue()
         luck = self._get_player_luck()
         current_level = compute_level(get_total_xp(self.db, self.character_id))
+        active_effects = load_active_effects(self.db)
+        drop_mods = self._aggregate_drop_mods(active_effects)
+        xp_multiplier = self._aggregate_xp_multiplier(active_effects)
 
         for raw in chunk_dicts:
             try:
@@ -128,7 +155,7 @@ class SyncAgent:
             except ValueError:
                 continue  # unknown label — skip XP and drops
 
-            xp = xp_for_chunk(chunk)
+            xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier))
             award_category_xp(
                 self.db,
                 character_id=self.character_id,
@@ -157,7 +184,7 @@ class SyncAgent:
             pool = eligible_items(catalogue, chunk, _SENTINEL_PLACE)
 
             for roll_n in range(rolls):
-                winner = weighted_draw(pool, DEFAULT_RARITY_WEIGHTS, drop_weight_mods={})
+                winner = weighted_draw(pool, DEFAULT_RARITY_WEIGHTS, drop_weight_mods=drop_mods)
                 if winner:
                     record_drop(
                         self.db,

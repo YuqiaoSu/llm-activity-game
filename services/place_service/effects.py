@@ -7,6 +7,14 @@ from services.models.item import Effect
 from services.models.place import Place
 
 
+def load_active_effects(conn: sqlite3.Connection) -> list[Effect]:
+    """Return all active effects currently applied across all places."""
+    rows = conn.execute(
+        "SELECT effect_type, params FROM place_active_effects"
+    ).fetchall()
+    return [Effect(effect_type=r["effect_type"], target="", params=json.loads(r["params"])) for r in rows]
+
+
 def rebuild_active_effects(conn: sqlite3.Connection, place: Place) -> list[Effect]:
     """
     Delete all active effects for `place`, then re-derive them from occupied slots.
