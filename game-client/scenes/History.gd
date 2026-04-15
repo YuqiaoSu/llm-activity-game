@@ -3,16 +3,17 @@ extends Control
 
 const RarityColor := preload("res://utils/RarityColor.gd")
 
-# Category → accent colour (matches HUD bar palette)
+# Category → accent colour; matches Category enum: WORK GAME VIDEO SOCIAL EXPLORE SLEEP SPECIAL
 const _CAT_COLORS := {
-    "WORK":    Color(0.27, 0.58, 1.00),
-    "GAME":    Color(0.18, 0.80, 0.44),
-    "STUDY":   Color(0.64, 0.19, 0.85),
-    "SOCIAL":  Color(1.00, 0.50, 0.00),
-    "FITNESS": Color(0.96, 0.26, 0.21),
-    "CREATIVE":Color(0.99, 0.76, 0.03),
-    "OTHER":   Color(0.60, 0.60, 0.60),
+    "WORK":    Color(0.27, 0.58, 1.00),  # blue
+    "GAME":    Color(0.18, 0.80, 0.44),  # green
+    "VIDEO":   Color(0.96, 0.26, 0.21),  # red
+    "SOCIAL":  Color(1.00, 0.50, 0.00),  # orange
+    "EXPLORE": Color(0.99, 0.76, 0.03),  # yellow
+    "SLEEP":   Color(0.49, 0.34, 0.76),  # violet
+    "SPECIAL": Color(0.64, 0.19, 0.85),  # purple
 }
+const _CAT_COLOR_FALLBACK := Color(0.60, 0.60, 0.60)
 
 @onready var _count_label: Label        = $VBox/Header/CountLabel
 @onready var _entry_list: VBoxContainer = $VBox/Scroll/EntryList
@@ -48,7 +49,7 @@ func _make_row(entry: Dictionary) -> Control:
     var dot := ColorRect.new()
     dot.custom_minimum_size = Vector2(10, 10)
     var cat: String = entry.get("category", "OTHER")
-    dot.color = _CAT_COLORS.get(cat, _CAT_COLORS["OTHER"])
+    dot.color = _CAT_COLORS.get(cat, _CAT_COLOR_FALLBACK)
 
     # Category label
     var cat_lbl := Label.new()
