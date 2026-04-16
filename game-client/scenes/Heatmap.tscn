@@ -1,0 +1,70 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/Heatmap.gd" id="1"]
+
+[node name="Heatmap" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16
+offset_top = 16
+offset_right = -16
+offset_bottom = -16
+
+[node name="Header" type="HBoxContainer" parent="VBox"]
+
+[node name="BackButton" type="Button" parent="VBox/Header"]
+text = "← Back"
+
+[node name="TitleLabel" type="Label" parent="VBox/Header"]
+text = "Activity Heatmap"
+add_theme_font_size_override/font_size = 18
+size_flags_horizontal = 3
+
+[node name="Controls" type="HBoxContainer" parent="VBox"]
+
+[node name="WeeksLabel" type="Label" parent="VBox/Controls"]
+text = "Weeks:"
+
+[node name="WeeksSpin" type="SpinBox" parent="VBox/Controls"]
+
+[node name="Legend" type="HBoxContainer" parent="VBox"]
+
+[node name="LegendLabel" type="Label" parent="VBox/Legend"]
+text = "Less "
+add_theme_font_size_override/font_size = 10
+
+[node name="L0" type="ColorRect" parent="VBox/Legend"]
+custom_minimum_size = Vector2(12, 12)
+color = Color(0.15, 0.15, 0.15, 1.0)
+
+[node name="L1" type="ColorRect" parent="VBox/Legend"]
+custom_minimum_size = Vector2(12, 12)
+color = Color(0.20, 0.40, 0.20, 1.0)
+
+[node name="L2" type="ColorRect" parent="VBox/Legend"]
+custom_minimum_size = Vector2(12, 12)
+color = Color(0.20, 0.65, 0.20, 1.0)
+
+[node name="L3" type="ColorRect" parent="VBox/Legend"]
+custom_minimum_size = Vector2(12, 12)
+color = Color(0.20, 0.88, 0.20, 1.0)
+
+[node name="L4" type="ColorRect" parent="VBox/Legend"]
+custom_minimum_size = Vector2(12, 12)
+color = Color(0.55, 1.00, 0.40, 1.0)
+
+[node name="LegendMoreLabel" type="Label" parent="VBox/Legend"]
+text = " More"
+add_theme_font_size_override/font_size = 10
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+size_flags_vertical = 3
+
+[node name="Grid" type="GridContainer" parent="VBox/Scroll"]
+add_theme_constant_override/h_separation = 2
+add_theme_constant_override/v_separation = 2

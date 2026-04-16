@@ -33,6 +33,7 @@ signal daily_chart_updated(entries: Array)
 signal events_updated(entries: Array)
 signal active_events_updated(entries: Array)
 signal donation_completed(ok: bool, data: Dictionary)
+signal heatmap_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -297,6 +298,15 @@ func fetch_active_events() -> void:
 			active_events_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /events/active response is not an Array")
+	)
+
+
+func fetch_heatmap(weeks: int = 12) -> void:
+	_http_get("/history/heatmap?weeks=%d" % weeks, func(data) -> void:
+		if data is Array:
+			heatmap_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /history/heatmap response is not an Array")
 	)
 
 
