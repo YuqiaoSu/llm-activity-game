@@ -11,6 +11,13 @@ extends Control
 
 var _is_polling: bool = false
 
+const _MOOD_EMOJI := {
+	"happy":   "😄",
+	"neutral": "😐",
+	"sad":     "😔",
+	"anxious": "😰",
+}
+
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),  # 0 — Hatchling  (pale blue)
 	Color(0.50, 0.80, 0.50),  # 1 — Growing    (green)
@@ -111,6 +118,11 @@ func _on_profile(data: Dictionary) -> void:
 	if streak_days >= 2:
 		xp_line += "  ·  %d-day streak" % streak_days
 	_xp_label.text = xp_line
+
+	# Mood emoji prefix on the evolution label
+	var mood: String = data.get("mood", "neutral")
+	var emoji: String = _MOOD_EMOJI.get(mood, "😐")
+	_evolution_label.text = emoji + " " + _evolution_label.text
 
 	# Dormancy indicator
 	var is_dormant: bool = data.get("is_dormant", false)

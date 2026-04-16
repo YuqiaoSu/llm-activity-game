@@ -5,6 +5,7 @@ from services.progression.xp import get_total_xp, compute_level, compute_evoluti
 from services.progression.streak import get_streak
 from services.progression.config import EVOLUTION_STAGES
 from services.progression.decay import get_dormancy_info
+from services.progression.mood import compute_mood
 
 router = APIRouter()
 
@@ -30,6 +31,11 @@ def get_player_profile(request: Request) -> dict:
     level_xp_start, level_xp_end = compute_level_xp_range(level)
     streak = get_streak(db)
     dormancy = get_dormancy_info(db)
+    mood = compute_mood(
+        streak["current_streak"],
+        dormancy["is_dormant"],
+        dormancy["dormant_days"],
+    )
 
     try:
         visual = json.loads(row["visual"])
@@ -55,6 +61,7 @@ def get_player_profile(request: Request) -> dict:
         "is_dormant": dormancy["is_dormant"],
         "dormant_days": dormancy["dormant_days"],
         "has_recovery_bonus": dormancy["has_recovery_bonus"],
+        "mood": mood,
         "category_xp": category_xp,
         "visual": visual,
         "equipped_items": equipped_items,
