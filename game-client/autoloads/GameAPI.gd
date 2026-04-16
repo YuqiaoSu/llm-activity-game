@@ -26,6 +26,7 @@ signal fuse_completed(ok: bool, data: Dictionary)
 signal daily_goals_updated(entries: Array)
 signal recap_updated(data: Dictionary)
 signal catalogue_updated(items: Array)
+signal leaderboard_updated(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -121,6 +122,15 @@ func fetch_collection() -> void:
 			collection_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /collection response is not an Array")
+	)
+
+
+func fetch_leaderboard(weeks: int = 8) -> void:
+	_http_get("/leaderboard/weekly?weeks=%d" % weeks, func(data) -> void:
+		if data is Dictionary:
+			leaderboard_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /leaderboard/weekly response is not a Dictionary")
 	)
 
 
