@@ -10,6 +10,7 @@ extends Control
 @onready var _poll_button: Button             = $VBox/Buttons/PollButton
 
 var _is_polling: bool = false
+var _event_badge: Label = null   # created lazily on first active event
 
 const _MOOD_EMOJI := {
 	"happy":   "😄",
@@ -78,8 +79,13 @@ func _ready() -> void:
 	$VBox/Buttons/ChartButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/DailyChart.tscn")
 	)
+	$VBox/Buttons/EventsButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Events.tscn")
+	)
+	GameAPI.active_events_updated.connect(_on_active_events)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
+	GameAPI.fetch_active_events()
 
 
 func _exit_tree() -> void:
@@ -89,6 +95,8 @@ func _exit_tree() -> void:
 		GameAPI.poll_completed.disconnect(_on_poll_result)
 	if GameAPI.poll_summary_ready.is_connected(_on_poll_summary):
 		GameAPI.poll_summary_ready.disconnect(_on_poll_summary)
+	if GameAPI.active_events_updated.is_connected(_on_active_events):
+		GameAPI.active_events_updated.disconnect(_on_active_events)
 
 
 func _on_profile(data: Dictionary) -> void:
@@ -231,3 +239,29 @@ func _on_poll_summary(summary: Dictionary) -> void:
 		if is_instance_valid(popup):
 			popup.queue_free()
 	)
+
+
+func _on_active_events(entries: Array) -> void:
+	# Show a compact badge below the XP bar when at least one event is active.
+	# Badge is removed when entries is empty.
+	if is_instance_valid(_event_badge):
+		_event_badge.queue_free()
+		_event_badge = null
+
+	if entries.is_empty():
+		return
+
+	var lines: PackedStringArray = []
+	for raw in entries:
+		var ev := raw as Dictionary
+		var mult: float = float(ev.get("multiplier", 1.0))
+		var cat: String  = str(ev.get("category", "?")).capitalize()
+		lines.append("⚡ %s  ·  %.1f× %s XP" % [ev.get("label", "Event"), mult, cat])
+
+	_event_badge = Label.new()
+	_event_badge.text = "\n".join(lines)
+	_event_badge.modulate = Color(1.0, 0.9, 0.3)
+	_event_badge.add_theme_font_size_override("font_size", 12)
+	$VBox.add_child(_event_badge)
+	# Move the badge just after the XP label (index 3 in VBox: CompanionArea=0, LevelLabel=1, XPLabel=2)
+	$VBox.move_child(_event_badge, 3)

@@ -10,6 +10,7 @@ from services.seeds.items import SEED_ITEMS
 from services.seeds.places import SEED_PLACES
 from services.seeds.achievements import SEED_ACHIEVEMENTS
 from services.seeds.weekly_challenges import SEED_WEEKLY_CHALLENGES
+from services.seeds.events import get_seed_events
 
 
 def seed(db_path: str = "game.db") -> None:
@@ -45,6 +46,16 @@ def seed(db_path: str = "game.db") -> None:
             ch,
         )
     print(f"  {len(SEED_WEEKLY_CHALLENGES)} weekly challenge definitions seeded.")
+
+    # Challenge events
+    events = get_seed_events()
+    for ev in events:
+        conn.execute(
+            "INSERT OR IGNORE INTO challenge_events "
+            "(event_id, label, category, multiplier, starts_at, ends_at) VALUES (?,?,?,?,?,?)",
+            ev,
+        )
+    print(f"  {len(events)} challenge events seeded.")
 
     # Default player profile
     default_visual = json.dumps({

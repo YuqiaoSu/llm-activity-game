@@ -131,6 +131,24 @@ class SyncAgent:
                     multiplier *= float(effect.params.get("factor", 1.0))
         return multiplier
 
+    def _load_active_event_multipliers(self) -> dict[str, float]:
+        """Return {category_upper: multiplier} for currently-active challenge events.
+
+        'ALL' events are stored under the key 'ALL' and applied to every category.
+        Multiple active events for the same category multiply together.
+        """
+        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        rows = self.db.execute(
+            "SELECT category, multiplier FROM challenge_events "
+            "WHERE starts_at <= ? AND ends_at >= ?",
+            (now, now),
+        ).fetchall()
+        mults: dict[str, float] = {}
+        for row in rows:
+            cat = row["category"].upper()
+            mults[cat] = mults.get(cat, 1.0) * float(row["multiplier"])
+        return mults
+
     def _check_place_unlocks(self, player_level: int) -> None:
         """Unlock any LOCKED places whose condition is now met and notify the player."""
         places = list_places(self.db)
@@ -174,6 +192,7 @@ class SyncAgent:
         active_effects = load_active_effects(self.db) + compute_set_bonuses(self.db)
         drop_mods = self._aggregate_drop_mods(active_effects)
         xp_multiplier = self._aggregate_xp_multiplier(active_effects)
+        event_mults = self._load_active_event_multipliers()
         xp_earned_this_poll: dict[str, int] = {}
 
         streak = get_streak(self.db)
@@ -200,7 +219,8 @@ class SyncAgent:
                 continue  # unknown label — skip XP and drops
 
             cat_bonus = self._category_xp_bonus(active_effects, cat.value)
-            xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier * cat_bonus))
+            event_mult = event_mults.get(cat.value.upper(), 1.0) * event_mults.get("ALL", 1.0)
+            xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier * cat_bonus * event_mult))
             xp_earned_this_poll[cat.value] = xp_earned_this_poll.get(cat.value, 0) + xp
             award_category_xp(
                 self.db,

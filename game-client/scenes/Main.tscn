@@ -97,6 +97,9 @@ text = "Bests →"
 [node name="ChartButton" type="Button" parent="VBox/Buttons"]
 text = "Chart →"
 
+[node name="EventsButton" type="Button" parent="VBox/Buttons"]
+text = "Events →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

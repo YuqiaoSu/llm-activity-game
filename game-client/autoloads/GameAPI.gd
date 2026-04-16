@@ -30,6 +30,8 @@ signal recap_updated(data: Dictionary)
 signal catalogue_updated(items: Array)
 signal leaderboard_updated(data: Dictionary)
 signal daily_chart_updated(entries: Array)
+signal events_updated(entries: Array)
+signal active_events_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -270,6 +272,24 @@ func equip_item(item_id: String, equipped: bool) -> void:
         else:
             push_error("GameAPI: equip %s → %d" % [item_id, code])
     )
+
+
+func fetch_events() -> void:
+	_http_get("/events", func(data) -> void:
+		if data is Array:
+			events_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /events response is not an Array")
+	)
+
+
+func fetch_active_events() -> void:
+	_http_get("/events/active", func(data) -> void:
+		if data is Array:
+			active_events_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /events/active response is not an Array")
+	)
 
 
 func poll_now() -> void:

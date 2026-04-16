@@ -186,6 +186,18 @@ CREATE TABLE IF NOT EXISTS daily_goals (
     UNIQUE (player_id, date, category)
 );
 
+-- challenge_events: limited-window XP multiplier events per category
+-- category may be 'ALL' to apply to every category.
+-- multiplier is applied to base XP when a chunk falls within [starts_at, ends_at].
+CREATE TABLE IF NOT EXISTS challenge_events (
+    event_id    TEXT PRIMARY KEY,
+    label       TEXT NOT NULL,           -- display name, e.g. "Focus Weekend"
+    category    TEXT NOT NULL,           -- Category value or 'ALL'
+    multiplier  REAL NOT NULL DEFAULT 2.0,
+    starts_at   TEXT NOT NULL,           -- ISO datetime (UTC)
+    ends_at     TEXT NOT NULL            -- ISO datetime (UTC)
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,
