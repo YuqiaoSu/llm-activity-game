@@ -121,6 +121,17 @@ func _make_card(place: Dictionary) -> Control:
 		bonus_lbl.add_theme_font_size_override("font_size", 11)
 		vbox.add_child(bonus_lbl)
 
+	# ── place level / XP (only for unlocked places) ─────────────────────────
+	if unlocked:
+		var place_level: int  = place.get("level", 1) as int
+		var place_xp: int     = place.get("xp", 0) as int
+		var next_threshold: int = place_level * place_level * 50  # (level)^2 × 50
+		var lvl_lbl := Label.new()
+		lvl_lbl.text = "  Lv.%d  ·  %d / %d XP" % [place_level, place_xp, next_threshold]
+		lvl_lbl.modulate = Color(0.55, 0.85, 1.0)
+		lvl_lbl.add_theme_font_size_override("font_size", 10)
+		vbox.add_child(lvl_lbl)
+
 	# ── slot rows (only for unlocked places with slots) ─────────────────────
 	var slots: Array = place.get("slots", [])
 	if unlocked and slots.size() > 0:

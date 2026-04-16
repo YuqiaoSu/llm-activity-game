@@ -81,7 +81,9 @@ CREATE TABLE IF NOT EXISTS places (
     item_pool         TEXT NOT NULL,
     connected_to      TEXT NOT NULL DEFAULT '[]',
     parent_place      TEXT,
-    metadata          TEXT NOT NULL DEFAULT '{}'
+    metadata          TEXT NOT NULL DEFAULT '{}',
+    xp                INTEGER NOT NULL DEFAULT 0,
+    level             INTEGER NOT NULL DEFAULT 1
 );
 
 -- place_slots: slots within a place

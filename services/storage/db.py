@@ -13,11 +13,30 @@ _DEFAULT_VISUAL = json.dumps({
 })
 
 
+def _run_migrations(conn: sqlite3.Connection) -> None:
+    """Idempotent column additions for DB schema evolution.
+
+    SQLite does not support IF NOT EXISTS on ALTER TABLE, so we catch
+    the OperationalError that fires when a column already exists.
+    """
+    _safe_add_column(conn, "places", "xp",    "INTEGER NOT NULL DEFAULT 0")
+    _safe_add_column(conn, "places", "level",  "INTEGER NOT NULL DEFAULT 1")
+
+
+def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    try:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        conn.commit()
+    except Exception:
+        pass  # column already exists — nothing to do
+
+
 def init_db(conn: sqlite3.Connection) -> None:
-    """Execute schema.sql against the given connection."""
+    """Execute schema.sql against the given connection, then run migrations."""
     schema = _SCHEMA_PATH.read_text(encoding="utf-8")
     conn.executescript(schema)
     conn.commit()  # executescript already commits; this is a no-op but kept for clarity
+    _run_migrations(conn)
 
 
 def bootstrap_defaults(conn: sqlite3.Connection) -> None:

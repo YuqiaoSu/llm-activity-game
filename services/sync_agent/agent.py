@@ -21,6 +21,7 @@ from services.progression.weekly_challenges import update_weekly_progress
 from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress
 from services.notifications.desktop import notify_level_up
 from services.progression.milestones import check_streak_milestone_drop
+from services.place_service.upgrade import award_place_xp, get_active_place_ids
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -206,6 +207,11 @@ class SyncAgent:
                     datetime.now(timezone.utc).isoformat(),
                 ),
             )
+            self.db.commit()
+
+            # Award XP to any places that currently have items slotted
+            for pid in get_active_place_ids(self.db):
+                award_place_xp(self.db, pid, xp, self.character_id)
             self.db.commit()
 
             # Roll drops

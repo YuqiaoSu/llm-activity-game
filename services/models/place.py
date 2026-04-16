@@ -41,3 +41,5 @@ class Place(BaseModel):
     connected_to: list[str] = Field(default_factory=list)
     parent_place: str | None = None
     active_effects: list[Effect] = Field(default_factory=list)  # rebuilt whenever a slot occupant changes
+    xp: int = 0
+    level: int = 1

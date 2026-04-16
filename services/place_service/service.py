@@ -34,6 +34,8 @@ def _row_to_place(conn: sqlite3.Connection, row: sqlite3.Row) -> Place:
             )
             for s in slots
         ],
+        xp=row["xp"] if "xp" in row.keys() else 0,
+        level=row["level"] if "level" in row.keys() else 1,
     )
 
 
