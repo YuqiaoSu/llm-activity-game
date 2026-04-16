@@ -18,7 +18,7 @@ from services.place_service.effects import load_active_effects, compute_set_bonu
 from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
 from services.progression.weekly_challenges import update_weekly_progress
-from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress
+from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress, check_goal_streak_reward
 from services.notifications.desktop import notify_level_up
 from services.progression.milestones import check_streak_milestone_drop
 from services.place_service.upgrade import award_place_xp, get_active_place_ids
@@ -283,6 +283,9 @@ class SyncAgent:
             except Exception:
                 pass
         self.db.commit()
+
+        # Check if today's goals are all complete and award streak reward if milestone reached
+        check_goal_streak_reward(self.db, self.character_id)
 
         return PollResult.OK
 

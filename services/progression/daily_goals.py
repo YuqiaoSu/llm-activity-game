@@ -10,6 +10,13 @@ import uuid
 from datetime import datetime, timezone
 from services.progression.suggestions import get_suggestions
 
+# Milestone thresholds and the rarity each awards
+_GOAL_STREAK_MILESTONES: list[tuple[int, str]] = [
+    (30, "LEGENDARY"),
+    (14, "EPIC"),
+    (7,  "RARE"),
+]
+
 
 def _today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
@@ -106,3 +113,122 @@ def get_daily_goals(
             "completed": bool(r["completed"]),
         })
     return result
+
+
+def check_goal_streak_reward(
+    conn: sqlite3.Connection,
+    character_id: str = "player_default",
+) -> bool:
+    """Increment goal_streak if all today's goals are completed; award a drop on milestone.
+
+    Returns True if a streak milestone was crossed and a drop was awarded.
+    Idempotent: only processes once per calendar day via last_goal_streak_date.
+    No-op when there are no goals today (avoids rewarding vacuous completion).
+    """
+    today = _today()
+    streak_player_id = "default"   # streak_state always uses 'default' (see streak.py)
+    goals_player_id = character_id  # daily_goals uses character_id
+
+    # Ensure streak_state row exists
+    conn.execute(
+        "INSERT OR IGNORE INTO streak_state (player_id) VALUES (?)",
+        (streak_player_id,),
+    )
+    conn.commit()
+
+    state = conn.execute(
+        "SELECT goal_streak, last_goal_streak_date FROM streak_state WHERE player_id=?",
+        (streak_player_id,),
+    ).fetchone()
+    if state is None:
+        return False
+
+    # Already processed today
+    if state["last_goal_streak_date"] == today:
+        return False
+
+    # Check today's goals: must have at least one and all must be completed
+    totals = conn.execute(
+        "SELECT COUNT(*) AS total, SUM(completed) AS done FROM daily_goals WHERE player_id=? AND date=?",
+        (goals_player_id, today),
+    ).fetchone()
+    total: int = totals["total"] or 0
+    done: int = int(totals["done"] or 0)
+
+    if total == 0 or done < total:
+        # Not all completed — reset streak, stamp date so we don't re-check today
+        conn.execute(
+            "UPDATE streak_state SET goal_streak=0, last_goal_streak_date=? WHERE player_id=?",
+            (today, streak_player_id),
+        )
+        conn.commit()
+        return False
+
+    # All goals met — increment streak
+    new_streak: int = (state["goal_streak"] or 0) + 1
+    conn.execute(
+        "UPDATE streak_state SET goal_streak=?, last_goal_streak_date=? WHERE player_id=?",
+        (new_streak, today, streak_player_id),
+    )
+    conn.commit()
+
+    # Check for milestone reward
+    for threshold, rarity in _GOAL_STREAK_MILESTONES:
+        if new_streak % threshold != 0:
+            continue
+        # Idempotent: use milestone + date as synthetic chunk_id
+        synthetic_chunk_id = f"goal_streak_{threshold}_{today}"
+        already = conn.execute(
+            "SELECT 1 FROM reward_ledger WHERE chunk_id=? AND roll_n=0",
+            (synthetic_chunk_id,),
+        ).fetchone()
+        if already:
+            break  # already awarded this milestone today
+
+        # Pick a random item at the milestone rarity
+        candidates = conn.execute(
+            """
+            SELECT item_id FROM item_definitions
+            WHERE json_extract(data, '$.rarity') = ?
+            """,
+            (rarity,),
+        ).fetchall()
+        if not candidates:
+            break
+
+        import random
+        winner_id: str = random.choice(candidates)["item_id"]
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Insert into inventory
+        new_iid = str(uuid.uuid4())
+        conn.execute(
+            "INSERT INTO inventory (instance_id, character_id, item_id, acquired_at, source_chunk) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (new_iid, character_id, winner_id, now, synthetic_chunk_id),
+        )
+        # Stamp reward_ledger to prevent duplicates
+        conn.execute(
+            "INSERT OR IGNORE INTO reward_ledger "
+            "(ledger_id, chunk_id, roll_n, item_id, character_id, awarded_at) "
+            "VALUES (?, ?, 0, ?, ?, ?)",
+            (str(uuid.uuid4()), synthetic_chunk_id, winner_id, character_id, now),
+        )
+        # Stamp collection_log
+        conn.execute(
+            "INSERT OR IGNORE INTO collection_log (player_id, item_id, first_seen_at) "
+            "VALUES (?, ?, ?)",
+            (character_id, winner_id, now),
+        )
+        # Notify player
+        from services.reward_ledger.ledger import _insert_notification
+        _insert_notification(conn, character_id, "item_drop", {
+            "item_id": winner_id,
+            "rarity": rarity,
+            "source": f"goal_streak_{threshold}",
+        })
+        conn.commit()
+        return True
+        break  # only award the highest matching milestone
+
+    return False
