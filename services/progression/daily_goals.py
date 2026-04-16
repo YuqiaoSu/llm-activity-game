@@ -17,6 +17,24 @@ _GOAL_STREAK_MILESTONES: list[tuple[int, str]] = [
     (7,  "RARE"),
 ]
 
+_DIFFICULTY_TIER_DAYS   = 3      # streak tiers: every 3 consecutive days
+_DIFFICULTY_FACTOR      = 1.20   # 20% harder per tier
+_MAX_TARGET_SEC         = 7200   # hard cap: 2 hours per goal
+
+
+def compute_goal_difficulty_multiplier(goal_streak: int) -> float:
+    """Return the target_sec multiplier for a given goal_streak.
+
+    Tiers:  0–2 → 1.0×
+            3–5 → 1.2×
+            6–8 → 1.44×  etc., compounding every 3 days.
+
+    The multiplier is applied when generating goals; the cap is enforced
+    in ensure_daily_goals.
+    """
+    tiers = max(0, goal_streak // _DIFFICULTY_TIER_DAYS)
+    return _DIFFICULTY_FACTOR ** tiers
+
 
 def _today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
@@ -37,6 +55,13 @@ def ensure_daily_goals(conn: sqlite3.Connection, player_id: str = "player_defaul
     if existing > 0:
         return
 
+    # Read goal streak to scale difficulty
+    streak_row = conn.execute(
+        "SELECT goal_streak FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    goal_streak: int = int(streak_row["goal_streak"]) if streak_row else 0
+    difficulty_mult = compute_goal_difficulty_multiplier(goal_streak)
+
     suggestions = get_suggestions(conn, player_id)
     now = datetime.now(timezone.utc).isoformat()
     added = 0
@@ -46,7 +71,8 @@ def ensure_daily_goals(conn: sqlite3.Connection, player_id: str = "player_defaul
         cat = s.get("category", "")
         if not cat:
             continue
-        target_sec = s.get("target_min", 20) * 60
+        base_sec = s.get("target_min", 20) * 60
+        target_sec = min(_MAX_TARGET_SEC, int(base_sec * difficulty_mult))
         conn.execute(
             """
             INSERT OR IGNORE INTO daily_goals
