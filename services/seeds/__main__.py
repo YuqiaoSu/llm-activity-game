@@ -9,6 +9,7 @@ from services.place_service.service import save_place
 from services.seeds.items import SEED_ITEMS
 from services.seeds.places import SEED_PLACES
 from services.seeds.achievements import SEED_ACHIEVEMENTS
+from services.seeds.weekly_challenges import SEED_WEEKLY_CHALLENGES
 
 
 def seed(db_path: str = "game.db") -> None:
@@ -36,6 +37,14 @@ def seed(db_path: str = "game.db") -> None:
             ach,
         )
     print(f"  {len(SEED_ACHIEVEMENTS)} achievement definitions seeded.")
+
+    # Weekly challenges
+    for ch in SEED_WEEKLY_CHALLENGES:
+        conn.execute(
+            "INSERT OR IGNORE INTO weekly_challenges (challenge_id, name, description, category, metric, threshold) VALUES (?, ?, ?, ?, ?, ?)",
+            ch,
+        )
+    print(f"  {len(SEED_WEEKLY_CHALLENGES)} weekly challenge definitions seeded.")
 
     # Default player profile
     default_visual = json.dumps({

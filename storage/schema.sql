@@ -129,6 +129,28 @@ CREATE TABLE IF NOT EXISTS player_achievements (
     PRIMARY KEY (player_id, achievement_id)
 );
 
+-- weekly_challenges: rotating weekly goal definitions (seeded at startup)
+CREATE TABLE IF NOT EXISTS weekly_challenges (
+    challenge_id  TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    description   TEXT NOT NULL,
+    category      TEXT NOT NULL,   -- Category value for 'xp' metric; 'ALL' for cross-category metrics
+    metric        TEXT NOT NULL,   -- 'xp' | 'total_xp' | 'categories'
+    threshold     INTEGER NOT NULL
+);
+
+-- player_weekly_progress: per-player progress row per challenge per ISO week
+-- week_start is the Monday of the week (YYYY-MM-DD); acts as automatic weekly reset
+CREATE TABLE IF NOT EXISTS player_weekly_progress (
+    player_id     TEXT NOT NULL,
+    challenge_id  TEXT NOT NULL REFERENCES weekly_challenges(challenge_id),
+    week_start    TEXT NOT NULL,
+    progress      INTEGER NOT NULL DEFAULT 0,
+    completed     INTEGER NOT NULL DEFAULT 0,
+    reward_given  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (player_id, challenge_id, week_start)
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,

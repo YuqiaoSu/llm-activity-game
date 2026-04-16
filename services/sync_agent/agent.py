@@ -17,6 +17,7 @@ from services.place_service.service import list_places, check_unlock_condition
 from services.place_service.effects import load_active_effects
 from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
+from services.progression.weekly_challenges import update_weekly_progress
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -144,6 +145,7 @@ class SyncAgent:
         active_effects = load_active_effects(self.db)
         drop_mods = self._aggregate_drop_mods(active_effects)
         xp_multiplier = self._aggregate_xp_multiplier(active_effects)
+        xp_earned_this_poll: dict[str, int] = {}
 
         streak = get_streak(self.db)
         if streak["current_streak"] >= _STREAK_BONUS_THRESHOLD:
@@ -165,6 +167,7 @@ class SyncAgent:
                 continue  # unknown label — skip XP and drops
 
             xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier))
+            xp_earned_this_poll[cat.value] = xp_earned_this_poll.get(cat.value, 0) + xp
             award_category_xp(
                 self.db,
                 character_id=self.character_id,
@@ -220,6 +223,9 @@ class SyncAgent:
 
         # Check and unlock any newly-met achievements
         check_achievements(self.db, self.character_id)
+
+        # Update weekly challenge progress
+        update_weekly_progress(self.db, self.character_id, xp_earned_this_poll)
         self.db.commit()
 
         return PollResult.OK

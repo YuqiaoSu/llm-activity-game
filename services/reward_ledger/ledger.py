@@ -111,6 +111,19 @@ def insert_place_unlock_notification(
     })
 
 
+def insert_challenge_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    challenge_id: str,
+    challenge_name: str,
+) -> None:
+    """Insert a challenge_complete pending_notification. Caller is responsible for commit."""
+    _insert_notification(conn, character_id, "challenge_complete", {
+        "challenge_id": challenge_id,
+        "name": challenge_name,
+    })
+
+
 def insert_achievement_notification(
     conn: sqlite3.Connection,
     character_id: str,
