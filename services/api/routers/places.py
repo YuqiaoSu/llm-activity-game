@@ -4,6 +4,21 @@ from pydantic import BaseModel
 from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
 
+
+def _accepts_list(slot: dict) -> list[str]:
+    """Return the slot's accepts list (upper-cased), or [] if no filter."""
+    raw = slot.get("accepts")
+    if not raw:
+        return []
+    if isinstance(raw, list):
+        return [str(a).upper() for a in raw]
+    # stored as JSON string in some paths
+    try:
+        parsed = json.loads(raw)
+        return [str(a).upper() for a in parsed] if isinstance(parsed, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
+
 router = APIRouter()
 
 
@@ -12,25 +27,35 @@ class SlotAssignBody(BaseModel):
 
 
 def _enrich_slots(db, place_dict: dict) -> dict:
-    """Add occupant_name and occupant_rarity to each slot that has an occupant_id."""
+    """Add occupant_name, occupant_rarity, occupant_category, and occupant_matches_theme
+    to each slot that has an occupant_id."""
     for slot in place_dict.get("slots", []):
         occupant_id = slot.get("occupant_id")
+        accepts = _accepts_list(slot)
         if occupant_id is None:
             slot["occupant_name"] = None
             slot["occupant_rarity"] = None
+            slot["occupant_category"] = None
+            slot["occupant_matches_theme"] = False
             continue
         row = db.execute(
             """
-            SELECT json_extract(d.data, '$.name')   AS name,
-                   json_extract(d.data, '$.rarity') AS rarity
+            SELECT json_extract(d.data, '$.name')     AS name,
+                   json_extract(d.data, '$.rarity')   AS rarity,
+                   json_extract(d.data, '$.category') AS category
             FROM inventory i
             JOIN item_definitions d ON i.item_id = d.item_id
             WHERE i.instance_id = ?
             """,
             (occupant_id,),
         ).fetchone()
-        slot["occupant_name"]   = row["name"]   if row else None
-        slot["occupant_rarity"] = row["rarity"] if row else None
+        slot["occupant_name"]   = row["name"]     if row else None
+        slot["occupant_rarity"] = row["rarity"]   if row else None
+        slot["occupant_category"] = row["category"] if row else None
+        if accepts and row and row["category"]:
+            slot["occupant_matches_theme"] = row["category"].upper() in accepts
+        else:
+            slot["occupant_matches_theme"] = not bool(accepts)  # True when no filter
     return place_dict
 
 
@@ -91,11 +116,28 @@ def assign_slot(place_id: str, slot_id: str, body: SlotAssignBody, request: Requ
     # Validate new occupant exists in inventory
     if body.instance_id is not None:
         inv_row = db.execute(
-            "SELECT instance_id FROM inventory WHERE instance_id=? AND character_id='player_default'",
+            """
+            SELECT i.instance_id,
+                   json_extract(d.data, '$.category') AS category
+            FROM inventory i
+            JOIN item_definitions d ON i.item_id = d.item_id
+            WHERE i.instance_id=? AND i.character_id='player_default'
+            """,
             (body.instance_id,),
         ).fetchone()
         if inv_row is None:
             raise HTTPException(status_code=404, detail="Item instance not found in inventory")
+
+        # Validate category against slot's accepts filter
+        slot_data = {"accepts": json.loads(slot_row["accepts"]) if slot_row["accepts"] else None}
+        accepts = _accepts_list(slot_data)
+        if accepts and inv_row["category"] and inv_row["category"].upper() not in accepts:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Item category '{inv_row['category']}' is not accepted by this slot. "
+                       f"Accepted: {', '.join(accepts)}",
+            )
+
         db.execute(
             "UPDATE inventory SET placed_in=? WHERE instance_id=?",
             (slot_id, body.instance_id),

@@ -169,6 +169,26 @@ func _make_slot_row(place: Dictionary, slot: Dictionary) -> Control:
 	hbox.add_child(dot)
 	hbox.add_child(slot_lbl)
 	hbox.add_child(occupant_lbl)
+
+	# Theme match badge
+	if occupant_id != null and slot.get("occupant_matches_theme", false):
+		var theme_lbl := Label.new()
+		theme_lbl.text = "  ✓ Theme"
+		theme_lbl.modulate = Color(0.3, 1.0, 0.5)
+		theme_lbl.add_theme_font_size_override("font_size", 10)
+		hbox.add_child(theme_lbl)
+
+	# Accepts hint for empty filtered slots
+	var accepts_raw = slot.get("accepts", null)
+	if occupant_id == null and accepts_raw is Array and (accepts_raw as Array).size() > 0:
+		var hint_lbl := Label.new()
+		hint_lbl.text = "  [%s]" % ", ".join((accepts_raw as Array).map(
+			func(c: Variant) -> String: return str(c).capitalize()
+		))
+		hint_lbl.modulate = Color(0.6, 0.85, 1.0)
+		hint_lbl.add_theme_font_size_override("font_size", 10)
+		hbox.add_child(hint_lbl)
+
 	row.add_child(hbox)
 
 	# ── action buttons ───────────────────────────────────────────────────────
@@ -184,13 +204,18 @@ func _make_slot_row(place: Dictionary, slot: Dictionary) -> Control:
 	else:
 		var assign_btn := Button.new()
 		assign_btn.text = "Assign Item ▾"
+		var slot_accepts: Array = []
+		var accepts_raw = slot.get("accepts", null)
+		if accepts_raw is Array:
+			for a in accepts_raw as Array:
+				slot_accepts.append(str(a).to_upper())
 		# picker_box is created lazily and toggled on button press
 		var picker_box := VBoxContainer.new()
 		picker_box.visible = false
 		assign_btn.pressed.connect(func() -> void:
 			picker_box.visible = not picker_box.visible
 			if picker_box.visible:
-				_populate_picker(picker_box, place_id, slot_id)
+				_populate_picker(picker_box, place_id, slot_id, slot_accepts)
 		)
 		btn_row.add_child(assign_btn)
 		row.add_child(btn_row)
@@ -201,7 +226,7 @@ func _make_slot_row(place: Dictionary, slot: Dictionary) -> Control:
 	return row
 
 
-func _populate_picker(picker: VBoxContainer, place_id: String, slot_id: String) -> void:
+func _populate_picker(picker: VBoxContainer, place_id: String, slot_id: String, slot_accepts: Array = []) -> void:
 	for child in picker.get_children():
 		child.queue_free()
 
@@ -216,6 +241,13 @@ func _populate_picker(picker: VBoxContainer, place_id: String, slot_id: String) 
 		var iid = item.get("available_instance_id", null)
 		if iid == null:
 			continue  # all copies are already placed
+
+		# Filter by slot's accepted categories
+		if slot_accepts.size() > 0:
+			var item_cat: String = str(item.get("category", "")).to_upper()
+			if item_cat not in slot_accepts:
+				continue
+
 		var effects: Array = item.get("effects", [])
 		var effect_summary := _format_effects(effects)
 		var btn := Button.new()
@@ -237,7 +269,12 @@ func _populate_picker(picker: VBoxContainer, place_id: String, slot_id: String) 
 
 	if added == 0:
 		var lbl := Label.new()
-		lbl.text = "  (no unplaced items available)"
+		if slot_accepts.size() > 0:
+			lbl.text = "  (no matching items — need: %s)" % ", ".join(slot_accepts.map(
+				func(c: Variant) -> String: return str(c).capitalize()
+			))
+		else:
+			lbl.text = "  (no unplaced items available)"
 		picker.add_child(lbl)
 
 
