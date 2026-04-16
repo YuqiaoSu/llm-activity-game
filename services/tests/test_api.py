@@ -180,6 +180,19 @@ def test_get_places_includes_occupant_name(client, seeded_db):
     assert slot2["occupant_name"] == "Scroll"
 
 
+def test_get_places_includes_occupant_rarity(client, seeded_db):
+    """Slot occupant_rarity is None when empty, resolved rarity string when filled."""
+    r = client.get("/places/home_001")
+    assert r.status_code == 200
+    slot = r.json()["slots"][0]
+    assert slot["occupant_rarity"] is None
+
+    client.put("/places/home_001/slots/s1", json={"instance_id": "inv_001"})
+    r2 = client.get("/places/home_001")
+    slot2 = r2.json()["slots"][0]
+    assert slot2["occupant_rarity"] == "COMMON"
+
+
 def test_assign_item_to_slot(client, seeded_db):
     r = client.put("/places/home_001/slots/s1", json={"instance_id": "inv_001"})
     assert r.status_code == 200

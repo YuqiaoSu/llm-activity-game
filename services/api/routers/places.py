@@ -12,22 +12,25 @@ class SlotAssignBody(BaseModel):
 
 
 def _enrich_slots(db, place_dict: dict) -> dict:
-    """Add occupant_name to each slot that has an occupant_id."""
+    """Add occupant_name and occupant_rarity to each slot that has an occupant_id."""
     for slot in place_dict.get("slots", []):
         occupant_id = slot.get("occupant_id")
         if occupant_id is None:
             slot["occupant_name"] = None
+            slot["occupant_rarity"] = None
             continue
         row = db.execute(
             """
-            SELECT json_extract(d.data, '$.name') AS name
+            SELECT json_extract(d.data, '$.name')   AS name,
+                   json_extract(d.data, '$.rarity') AS rarity
             FROM inventory i
             JOIN item_definitions d ON i.item_id = d.item_id
             WHERE i.instance_id = ?
             """,
             (occupant_id,),
         ).fetchone()
-        slot["occupant_name"] = row["name"] if row else None
+        slot["occupant_name"]   = row["name"]   if row else None
+        slot["occupant_rarity"] = row["rarity"] if row else None
     return place_dict
 
 

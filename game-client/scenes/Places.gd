@@ -148,9 +148,11 @@ func _make_slot_row(place: Dictionary, slot: Dictionary) -> Control:
 
 	var occupant_lbl := Label.new()
 	if occupant_id != null:
-		var oname = slot.get("occupant_name", null)
-		occupant_lbl.text = str(oname) if oname != null else "(item %s)" % str(occupant_id).left(8)
-		occupant_lbl.modulate = _COLOR_SLOT_FILLED
+		var oname    = slot.get("occupant_name", null)
+		var orarity  = str(slot.get("occupant_rarity", ""))
+		var name_str: String = str(oname) if oname != null else "(item %s)" % str(occupant_id).left(8)
+		occupant_lbl.text = "%s [%s]" % [name_str, orarity.capitalize()] if orarity != "" else name_str
+		occupant_lbl.modulate = RarityColor.for_rarity(orarity)
 	else:
 		occupant_lbl.text = "(empty)"
 		occupant_lbl.modulate = _COLOR_SLOT_EMPTY
