@@ -112,6 +112,19 @@ func _on_profile(data: Dictionary) -> void:
 		xp_line += "  ·  %d-day streak" % streak_days
 	_xp_label.text = xp_line
 
+	# Dormancy indicator
+	var is_dormant: bool = data.get("is_dormant", false)
+	var dormant_days: int = data.get("dormant_days", 0)
+	var has_recovery: bool = data.get("has_recovery_bonus", false)
+	if is_dormant:
+		_evolution_label.modulate = Color(0.55, 0.55, 0.65)   # muted blue-grey
+		var dormant_text := " 💤 dormant (%dd)" % dormant_days
+		if has_recovery:
+			dormant_text += " · 1.5× XP ready!"
+		_evolution_label.text += dormant_text
+	else:
+		_evolution_label.modulate = Color.WHITE
+
 	_rebuild_xp_bars(data.get("category_xp", {}) as Dictionary)
 
 

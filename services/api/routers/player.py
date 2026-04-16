@@ -4,6 +4,7 @@ from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage, compute_level_xp_range
 from services.progression.streak import get_streak
 from services.progression.config import EVOLUTION_STAGES
+from services.progression.decay import get_dormancy_info
 
 router = APIRouter()
 
@@ -28,6 +29,7 @@ def get_player_profile(request: Request) -> dict:
     stage = compute_evolution_stage(level)
     level_xp_start, level_xp_end = compute_level_xp_range(level)
     streak = get_streak(db)
+    dormancy = get_dormancy_info(db)
 
     try:
         visual = json.loads(row["visual"])
@@ -50,6 +52,9 @@ def get_player_profile(request: Request) -> dict:
         "evolution_stage": stage,
         "next_evolution_level": next_stage_level,   # null when at max stage
         "streak_days": streak["current_streak"],
+        "is_dormant": dormancy["is_dormant"],
+        "dormant_days": dormancy["dormant_days"],
+        "has_recovery_bonus": dormancy["has_recovery_bonus"],
         "category_xp": category_xp,
         "visual": visual,
         "equipped_items": equipped_items,

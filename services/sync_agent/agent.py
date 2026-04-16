@@ -22,6 +22,12 @@ from services.progression.daily_goals import ensure_daily_goals, update_daily_go
 from services.notifications.desktop import notify_level_up
 from services.progression.milestones import check_streak_milestone_drop
 from services.place_service.upgrade import award_place_xp, get_active_place_ids
+from services.progression.decay import (
+    apply_daily_decay,
+    mark_recovery_if_dormant,
+    consume_recovery_bonus,
+    RECOVERY_MULTIPLIER,
+)
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -150,11 +156,17 @@ class SyncAgent:
         if manual:
             self.rate_limiter.record_trigger(self.character_id)
 
+        # Apply any pending daily XP decay (no-op when active or already ran today)
+        apply_daily_decay(self.db)
+
         cursor = self._get_cursor()
         chunk_dicts, new_cursor = self.tracker_client.fetch_chunks(after_cursor=cursor)
 
         if not chunk_dicts:
             return PollResult.NO_NEW_CHUNKS
+
+        # If coming back from dormancy, flag recovery bonus before we award XP
+        had_recovery = mark_recovery_if_dormant(self.db)
 
         catalogue = self._load_catalogue()
         luck = self._get_player_luck()
@@ -167,6 +179,10 @@ class SyncAgent:
         streak = get_streak(self.db)
         if streak["current_streak"] >= _STREAK_BONUS_THRESHOLD:
             xp_multiplier *= _STREAK_BONUS_FACTOR
+
+        # Apply recovery bonus multiplier for returning after dormancy
+        if had_recovery:
+            xp_multiplier *= RECOVERY_MULTIPLIER
 
         for raw in chunk_dicts:
             try:
@@ -241,6 +257,10 @@ class SyncAgent:
 
         if new_cursor:
             self._save_cursor(new_cursor)
+
+        # Consume recovery bonus now that XP has been awarded
+        if had_recovery:
+            consume_recovery_bonus(self.db)
 
         # Record activity for today's streak (UTC date of poll, not chunk date)
         update_streak(self.db, datetime.now(timezone.utc).date())
