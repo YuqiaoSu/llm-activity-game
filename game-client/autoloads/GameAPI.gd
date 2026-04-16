@@ -10,6 +10,7 @@ signal inventory_updated(items: Array)
 signal notifications_updated(notifs: Array)
 signal poll_completed(result: String)
 signal equip_updated(item_id: String, equipped: bool)
+signal item_discarded(instance_id: String)
 signal places_updated(places: Array)
 signal stats_updated(data: Dictionary)
 signal history_updated(entries: Array)
@@ -105,6 +106,15 @@ func assign_slot(place_id: String, slot_id: String, instance_id: Variant) -> voi
     )
 
 
+func discard_item(instance_id: String) -> void:
+	_http_delete("/inventory/instances/%s" % instance_id, func(code: int, _data: Dictionary) -> void:
+		if code == 200:
+			item_discarded.emit(instance_id)
+		else:
+			push_error("GameAPI: discard_item %s → %d" % [instance_id, code])
+	)
+
+
 func equip_item(item_id: String, equipped: bool) -> void:
     var body := JSON.stringify({"equipped": equipped})
     _http_patch("/inventory/%s/equip" % item_id, body, func(code: int, data: Dictionary) -> void:
@@ -187,6 +197,25 @@ func _http_put(path: String, body: String, on_done: Callable) -> void:
     if err != OK:
         push_error("GameAPI: failed to start PUT %s" % path)
         http.queue_free()
+
+
+func _http_delete(path: String, on_done: Callable) -> void:
+	var http := HTTPRequest.new()
+	add_child(http)
+	http.request_completed.connect(
+		func(result: int, code: int, _h: PackedStringArray, body: PackedByteArray) -> void:
+			http.queue_free()
+			if result != HTTPRequest.RESULT_SUCCESS:
+				push_error("GameAPI: network error on DELETE %s" % path)
+				return
+			var parsed = JSON.parse_string(body.get_string_from_utf8())
+			on_done.call(code, parsed if parsed != null else {})
+	)
+	var headers := PackedStringArray(["Content-Type: application/json"])
+	var err := http.request(BASE_URL + path, headers, HTTPClient.METHOD_DELETE, "")
+	if err != OK:
+		push_error("GameAPI: failed to start DELETE %s" % path)
+		http.queue_free()
 
 
 func _http_post(path: String, on_done: Callable) -> void:

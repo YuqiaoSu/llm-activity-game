@@ -334,6 +334,30 @@ def test_get_history_after_poll(client, seeded_db, monkeypatch):
     assert "drops" in entry
 
 
+def test_discard_item_success(client, seeded_db):
+    r = client.delete("/inventory/instances/inv_001")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["deleted"] is True
+    assert data["instance_id"] == "inv_001"
+    row = seeded_db.execute(
+        "SELECT * FROM inventory WHERE instance_id='inv_001'"
+    ).fetchone()
+    assert row is None
+
+
+def test_discard_item_not_found(client):
+    r = client.delete("/inventory/instances/nonexistent_id")
+    assert r.status_code == 404
+
+
+def test_discard_item_placed_returns_409(client, seeded_db):
+    seeded_db.execute("UPDATE inventory SET placed_in='s1' WHERE instance_id='inv_001'")
+    seeded_db.commit()
+    r = client.delete("/inventory/instances/inv_001")
+    assert r.status_code == 409
+
+
 def test_poll_now_no_new_chunks(client, monkeypatch):
     from services.sync_agent import tracker_client as tc_module
     monkeypatch.setattr(

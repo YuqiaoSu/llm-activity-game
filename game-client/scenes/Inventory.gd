@@ -13,6 +13,7 @@ func _ready() -> void:
 	)
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
+	GameAPI.item_discarded.connect(_on_item_discarded)
 	GameAPI.fetch_inventory()
 
 
@@ -21,9 +22,15 @@ func _exit_tree() -> void:
 		GameAPI.inventory_updated.disconnect(_on_inventory)
 	if GameAPI.equip_updated.is_connected(_on_equip_updated):
 		GameAPI.equip_updated.disconnect(_on_equip_updated)
+	if GameAPI.item_discarded.is_connected(_on_item_discarded):
+		GameAPI.item_discarded.disconnect(_on_item_discarded)
 
 
 func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
+	GameAPI.fetch_inventory()
+
+
+func _on_item_discarded(_instance_id: String) -> void:
 	GameAPI.fetch_inventory()
 
 
@@ -72,6 +79,19 @@ func _make_card(item: Dictionary) -> Control:
 	hbox.add_child(qty_lbl)
 	hbox.add_child(cat_lbl)
 	hbox.add_child(equip_btn)
+
+	# Discard button — only when an unplaced copy exists
+	var avail_iid = item.get("available_instance_id", null)
+	if avail_iid != null:
+		var discard_btn := Button.new()
+		discard_btn.text = "Discard"
+		discard_btn.modulate = Color(0.9, 0.4, 0.4)
+		var iid: String = str(avail_iid)
+		discard_btn.pressed.connect(func() -> void:
+			GameAPI.discard_item(iid)
+		)
+		hbox.add_child(discard_btn)
+
 	vbox.add_child(hbox)
 
 	# ── effect summary row (only when slot effects present) ───────────────────

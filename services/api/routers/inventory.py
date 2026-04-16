@@ -49,6 +49,28 @@ def get_inventory(request: Request) -> list[dict]:
     return result
 
 
+@router.delete("/instances/{instance_id}")
+def discard_item(instance_id: str, request: Request) -> dict:
+    """Delete a specific item instance from the player's inventory.
+
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    Returns 409 if the instance is currently assigned to a place slot.
+    """
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT instance_id, placed_in FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+    if row["placed_in"] is not None:
+        raise HTTPException(status_code=409, detail="Item is placed in a slot; remove it first")
+
+    db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
+    db.commit()
+    return {"deleted": True, "instance_id": instance_id}
+
+
 @router.patch("/{item_id}/equip")
 def equip_item(item_id: str, body: EquipRequest, request: Request) -> dict:
     """Toggle the equipped flag for all instances of item_id owned by the player.
