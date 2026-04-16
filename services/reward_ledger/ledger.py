@@ -111,6 +111,19 @@ def insert_place_unlock_notification(
     })
 
 
+def insert_achievement_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    achievement_id: str,
+    achievement_name: str,
+) -> None:
+    """Insert an achievement_unlock pending_notification. Caller is responsible for commit."""
+    _insert_notification(conn, character_id, "achievement_unlock", {
+        "achievement_id": achievement_id,
+        "name": achievement_name,
+    })
+
+
 def get_pending_notifications(
     conn: sqlite3.Connection,
     character_id: str,

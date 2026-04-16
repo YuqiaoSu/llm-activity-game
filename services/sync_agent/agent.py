@@ -16,6 +16,7 @@ from services.sync_agent.tracker_client import TrackerClient
 from services.place_service.service import list_places, check_unlock_condition
 from services.place_service.effects import load_active_effects
 from services.progression.streak import update_streak, get_streak
+from services.progression.achievements import check_achievements
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -216,6 +217,9 @@ class SyncAgent:
 
         # Record activity for today's streak (UTC date of poll, not chunk date)
         update_streak(self.db, datetime.now(timezone.utc).date())
+
+        # Check and unlock any newly-met achievements
+        check_achievements(self.db, self.character_id)
         self.db.commit()
 
         return PollResult.OK

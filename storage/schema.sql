@@ -112,6 +112,23 @@ CREATE TABLE IF NOT EXISTS streak_state (
     last_active_date TEXT    -- ISO date YYYY-MM-DD of last day XP was earned; NULL = never
 );
 
+-- achievements: milestone definitions (seeded at startup)
+CREATE TABLE IF NOT EXISTS achievements (
+    achievement_id  TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL,
+    condition_type  TEXT NOT NULL,  -- "total_xp" | "level" | "streak" | "items_collected"
+    threshold       INTEGER NOT NULL
+);
+
+-- player_achievements: which milestones each player has unlocked
+CREATE TABLE IF NOT EXISTS player_achievements (
+    player_id       TEXT NOT NULL,
+    achievement_id  TEXT NOT NULL REFERENCES achievements(achievement_id),
+    unlocked_at     TEXT NOT NULL,
+    PRIMARY KEY (player_id, achievement_id)
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,

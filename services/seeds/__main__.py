@@ -8,6 +8,7 @@ from services.storage.db import get_db
 from services.place_service.service import save_place
 from services.seeds.items import SEED_ITEMS
 from services.seeds.places import SEED_PLACES
+from services.seeds.achievements import SEED_ACHIEVEMENTS
 
 
 def seed(db_path: str = "game.db") -> None:
@@ -27,6 +28,14 @@ def seed(db_path: str = "game.db") -> None:
     for place in SEED_PLACES:
         save_place(conn, place)
     print(f"  {len(SEED_PLACES)} places seeded.")
+
+    # Achievements
+    for ach in SEED_ACHIEVEMENTS:
+        conn.execute(
+            "INSERT OR IGNORE INTO achievements (achievement_id, name, description, condition_type, threshold) VALUES (?, ?, ?, ?, ?)",
+            ach,
+        )
+    print(f"  {len(SEED_ACHIEVEMENTS)} achievement definitions seeded.")
 
     # Default player profile
     default_visual = json.dumps({

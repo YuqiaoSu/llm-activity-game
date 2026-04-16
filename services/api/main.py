@@ -6,7 +6,7 @@ import sqlite3
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from services.storage.db import get_db
-from services.api.routers import sync, inventory, player, places, notifications, stats, history
+from services.api.routers import sync, inventory, player, places, notifications, stats, history, achievements
 from services.sync_agent.agent import SyncAgent
 from services.sync_agent.tracker_client import TrackerClient
 from services.sync_agent.rate_limiter import RateLimiter
@@ -72,6 +72,7 @@ def create_app(db: sqlite3.Connection | None = None) -> FastAPI:
     app.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
     app.include_router(stats.router, prefix="/stats", tags=["stats"])
     app.include_router(history.router, prefix="/history", tags=["history"])
+    app.include_router(achievements.router, prefix="/achievements", tags=["achievements"])
 
     return app
 
