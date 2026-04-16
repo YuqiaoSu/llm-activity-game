@@ -21,6 +21,7 @@ signal inbox_updated(entries: Array)
 signal challenge_claimed(ok: bool, challenge_id: String, xp: int)
 signal challenge_rerolled(ok: bool, data: Dictionary)
 signal collection_updated(entries: Array)
+signal suggestions_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -116,6 +117,15 @@ func fetch_collection() -> void:
 			collection_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /collection response is not an Array")
+	)
+
+
+func fetch_suggestions() -> void:
+	_http_get("/suggestions", func(data) -> void:
+		if data is Array:
+			suggestions_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /suggestions response is not an Array")
 	)
 
 

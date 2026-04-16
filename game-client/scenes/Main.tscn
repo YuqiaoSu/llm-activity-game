@@ -79,6 +79,9 @@ text = "Inbox →"
 [node name="CollectionButton" type="Button" parent="VBox/Buttons"]
 text = "Collection →"
 
+[node name="SuggestionsButton" type="Button" parent="VBox/Buttons"]
+text = "Suggestions →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true
