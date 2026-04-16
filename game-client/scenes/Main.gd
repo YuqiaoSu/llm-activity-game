@@ -12,6 +12,11 @@ extends Control
 var _is_polling: bool = false
 var _event_badge: Label = null   # created lazily on first active event
 
+# Cached dormancy state so Welcome Back overlay can reference pre-poll profile
+var _was_dormant: bool = false
+var _dormant_days: int = 0
+var _had_recovery: bool = false
+
 const _MOOD_EMOJI := {
 	"happy":   "😄",
 	"neutral": "😐",
@@ -138,10 +143,15 @@ func _on_profile(data: Dictionary) -> void:
 	var emoji: String = _MOOD_EMOJI.get(mood, "😐")
 	_evolution_label.text = emoji + " " + _evolution_label.text
 
+	# Cache dormancy before poll so Welcome Back overlay can read it
+	_was_dormant  = data.get("is_dormant", false)
+	_dormant_days = data.get("dormant_days", 0)
+	_had_recovery = data.get("has_recovery_bonus", false)
+
 	# Dormancy indicator
-	var is_dormant: bool = data.get("is_dormant", false)
-	var dormant_days: int = data.get("dormant_days", 0)
-	var has_recovery: bool = data.get("has_recovery_bonus", false)
+	var is_dormant: bool = _was_dormant
+	var dormant_days: int = _dormant_days
+	var has_recovery: bool = _had_recovery
 	if is_dormant:
 		_evolution_label.modulate = Color(0.55, 0.55, 0.65)   # muted blue-grey
 		var dormant_text := " 💤 dormant (%dd)" % dormant_days
@@ -216,7 +226,33 @@ func _on_poll_summary(summary: Dictionary) -> void:
 	var chunks: int = summary.get("chunks_processed", 0) as int
 	var by_cat: Dictionary = summary.get("xp_by_category", {}) as Dictionary
 
-	# Build summary text
+	# ── Welcome Back overlay (shown when returning from dormancy) ────────────
+	if _was_dormant and _dormant_days >= 1:
+		var wb_lines: PackedStringArray = [
+			"👋 Welcome back!",
+			"",
+			"You were away for %d day%s." % [_dormant_days, "s" if _dormant_days != 1 else ""],
+		]
+		if _had_recovery:
+			wb_lines.append("⚡ Recovery bonus active: 1.5× XP this session!")
+		wb_lines.append("")
+		wb_lines.append("+%d XP earned (with bonus)" % total_xp)
+
+		var wb_popup := Label.new()
+		wb_popup.text = "\n".join(wb_lines)
+		wb_popup.modulate = Color(0.7, 0.9, 1.0)   # soft blue
+		wb_popup.add_theme_font_size_override("font_size", 14)
+		wb_popup.position = Vector2(20, 80)
+		wb_popup.z_index = 10
+		add_child(wb_popup)
+		var wb_timer := get_tree().create_timer(6.0)
+		wb_timer.timeout.connect(func() -> void:
+			if is_instance_valid(wb_popup):
+				wb_popup.queue_free()
+		)
+		return   # skip regular session summary when returning from dormancy
+
+	# ── Regular session summary ───────────────────────────────────────────────
 	var lines: PackedStringArray = [
 		"Session Summary",
 		"",
