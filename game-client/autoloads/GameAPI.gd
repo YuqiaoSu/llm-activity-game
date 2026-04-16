@@ -25,6 +25,7 @@ signal suggestions_updated(entries: Array)
 signal fuse_completed(ok: bool, data: Dictionary)
 signal daily_goals_updated(entries: Array)
 signal recap_updated(data: Dictionary)
+signal catalogue_updated(items: Array)
 
 
 func fetch_profile() -> void:
@@ -120,6 +121,18 @@ func fetch_collection() -> void:
 			collection_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /collection response is not an Array")
+	)
+
+
+func fetch_catalogue(category: String = "") -> void:
+	var path := "/catalogue"
+	if not category.is_empty():
+		path = "/catalogue/by-category/" + category
+	_http_get(path, func(data) -> void:
+		if data is Array:
+			catalogue_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /catalogue response is not an Array")
 	)
 
 
