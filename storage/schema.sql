@@ -151,6 +151,16 @@ CREATE TABLE IF NOT EXISTS player_weekly_progress (
     PRIMARY KEY (player_id, challenge_id, week_start)
 );
 
+-- weekly_reroll_state: one free reroll per player per ISO week
+-- rerolled_challenge_id records which challenge was swapped out (for history)
+CREATE TABLE IF NOT EXISTS weekly_reroll_state (
+    player_id              TEXT NOT NULL,
+    week_start             TEXT NOT NULL,
+    rerolled_challenge_id  TEXT,
+    rerolled_at            TEXT NOT NULL,
+    PRIMARY KEY (player_id, week_start)
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,

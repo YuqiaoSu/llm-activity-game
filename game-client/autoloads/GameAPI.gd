@@ -18,6 +18,8 @@ signal achievements_updated(entries: Array)
 signal challenges_updated(entries: Array)
 signal daily_stats_updated(entries: Array)
 signal inbox_updated(entries: Array)
+signal challenge_claimed(ok: bool, challenge_id: String, xp: int)
+signal challenge_rerolled(ok: bool, data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -104,6 +106,21 @@ func fetch_inbox(limit: int = 50, event_type: String = "") -> void:
 			inbox_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /notifications/inbox response is not an Array")
+	)
+
+
+func claim_challenge(challenge_id: String) -> void:
+	_http_post("/challenges/%s/claim" % challenge_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			challenge_claimed.emit(true, challenge_id, data.get("xp_awarded", 0))
+		else:
+			challenge_claimed.emit(false, challenge_id, 0)
+	)
+
+
+func reroll_challenge() -> void:
+	_http_post("/challenges/reroll", func(code: int, data: Dictionary) -> void:
+		challenge_rerolled.emit(code == 200, data)
 	)
 
 
