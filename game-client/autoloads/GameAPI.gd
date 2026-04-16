@@ -23,6 +23,7 @@ signal challenge_rerolled(ok: bool, data: Dictionary)
 signal collection_updated(entries: Array)
 signal suggestions_updated(entries: Array)
 signal fuse_completed(ok: bool, data: Dictionary)
+signal daily_goals_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -118,6 +119,15 @@ func fetch_collection() -> void:
 			collection_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /collection response is not an Array")
+	)
+
+
+func fetch_daily_goals() -> void:
+	_http_get("/goals/daily", func(data) -> void:
+		if data is Array:
+			daily_goals_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /goals/daily response is not an Array")
 	)
 
 

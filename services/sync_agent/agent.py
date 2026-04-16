@@ -18,6 +18,7 @@ from services.place_service.effects import load_active_effects, compute_set_bonu
 from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
 from services.progression.weekly_challenges import update_weekly_progress
+from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -226,6 +227,16 @@ class SyncAgent:
 
         # Update weekly challenge progress
         update_weekly_progress(self.db, self.character_id, xp_earned_this_poll)
+
+        # Ensure today's daily goals exist, then credit progress for each chunk's category
+        ensure_daily_goals(self.db, self.character_id)
+        for raw in chunk_dicts:
+            try:
+                chunk = Chunk.model_validate(raw)
+                cat = Category(chunk.label)
+                update_daily_goal_progress(self.db, cat.value, chunk.duration_sec, self.character_id)
+            except Exception:
+                pass
         self.db.commit()
 
         return PollResult.OK

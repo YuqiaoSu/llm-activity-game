@@ -82,6 +82,9 @@ text = "Collection →"
 [node name="SuggestionsButton" type="Button" parent="VBox/Buttons"]
 text = "Suggestions →"
 
+[node name="GoalsButton" type="Button" parent="VBox/Buttons"]
+text = "Goals →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

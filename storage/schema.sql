@@ -169,6 +169,21 @@ CREATE TABLE IF NOT EXISTS weekly_reroll_state (
     PRIMARY KEY (player_id, week_start)
 );
 
+-- daily_goals: short-lived (24h) activity targets auto-generated from the suggestion engine.
+-- date is the UTC calendar date (YYYY-MM-DD); one row per (player_id, date, category).
+-- progress_sec accumulates active seconds in that category during the day.
+CREATE TABLE IF NOT EXISTS daily_goals (
+    goal_id       TEXT PRIMARY KEY,
+    player_id     TEXT NOT NULL DEFAULT 'player_default',
+    date          TEXT NOT NULL,         -- UTC date YYYY-MM-DD
+    category      TEXT NOT NULL,
+    target_sec    INTEGER NOT NULL,      -- target active seconds (converted from suggestion target_min)
+    progress_sec  INTEGER NOT NULL DEFAULT 0,
+    completed     INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    UNIQUE (player_id, date, category)
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,
