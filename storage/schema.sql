@@ -151,6 +151,14 @@ CREATE TABLE IF NOT EXISTS player_weekly_progress (
     PRIMARY KEY (player_id, challenge_id, week_start)
 );
 
+-- collection_log: tracks the first time a player acquires each distinct item type
+CREATE TABLE IF NOT EXISTS collection_log (
+    player_id    TEXT NOT NULL,
+    item_id      TEXT NOT NULL REFERENCES item_definitions(item_id),
+    first_seen_at TEXT NOT NULL,
+    PRIMARY KEY (player_id, item_id)
+);
+
 -- weekly_reroll_state: one free reroll per player per ISO week
 -- rerolled_challenge_id records which challenge was swapped out (for history)
 CREATE TABLE IF NOT EXISTS weekly_reroll_state (

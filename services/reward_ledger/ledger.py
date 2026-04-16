@@ -78,6 +78,12 @@ def record_drop(
         (character_id, str(item.category.value), _XP_PER_DROP),
     )
 
+    # Stamp collection log on first acquisition of this item type
+    conn.execute(
+        "INSERT OR IGNORE INTO collection_log (player_id, item_id, first_seen_at) VALUES (?, ?, ?)",
+        (character_id, item.item_id, now),
+    )
+
     _insert_notification(conn, character_id, "item_drop", {
         "item_id": item.item_id,
         "instance_id": instance_id,
