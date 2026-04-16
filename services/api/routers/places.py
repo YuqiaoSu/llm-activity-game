@@ -65,6 +65,42 @@ def _enrich_slots(db, place_dict: dict) -> dict:
     return place_dict
 
 
+def _add_perks(db, place_dicts: list[dict]) -> list[dict]:
+    """Attach a `perks` list to each place dict from the place_perks table.
+
+    Each perk entry: {perk_id, item_id, item_name, item_rarity, boost_factor, donated_at}.
+    Places with no perks get an empty list.
+    """
+    # Fetch all perks joined with item_definitions in one query
+    rows = db.execute(
+        """
+        SELECT p.perk_id, p.place_id, p.item_id, p.boost_factor, p.donated_at,
+               json_extract(d.data, '$.name')   AS item_name,
+               json_extract(d.data, '$.rarity') AS item_rarity
+        FROM place_perks p
+        LEFT JOIN item_definitions d ON p.item_id = d.item_id
+        ORDER BY p.donated_at
+        """
+    ).fetchall()
+
+    # Group by place_id
+    by_place: dict[str, list[dict]] = {}
+    for r in rows:
+        entry = {
+            "perk_id":     r["perk_id"],
+            "item_id":     r["item_id"],
+            "item_name":   r["item_name"] or r["item_id"],
+            "item_rarity": r["item_rarity"],
+            "boost_factor": float(r["boost_factor"]),
+            "donated_at":  r["donated_at"],
+        }
+        by_place.setdefault(r["place_id"], []).append(entry)
+
+    for p in place_dicts:
+        p["perks"] = by_place.get(p.get("place_id", ""), [])
+    return place_dicts
+
+
 def _add_set_bonus_flag(db, place_dicts: list[dict]) -> list[dict]:
     """Annotate each place dict with set_bonus_active and set_bonus_factor."""
     bonuses = compute_set_bonuses(db)
@@ -81,7 +117,8 @@ def _add_set_bonus_flag(db, place_dicts: list[dict]) -> list[dict]:
 def get_places(request: Request) -> list[dict]:
     db = request.app.state.db
     dicts = [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
-    return _add_set_bonus_flag(db, dicts)
+    _add_set_bonus_flag(db, dicts)
+    return _add_perks(db, dicts)
 
 
 @router.get("/{place_id}")
@@ -91,7 +128,8 @@ def get_place_by_id(place_id: str, request: Request) -> dict:
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
     result = _enrich_slots(db, place.model_dump())
-    return _add_set_bonus_flag(db, [result])[0]
+    _add_set_bonus_flag(db, [result])
+    return _add_perks(db, [result])[0]
 
 
 @router.put("/{place_id}/slots/{slot_id}")

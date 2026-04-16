@@ -226,3 +226,69 @@ def test_perk_boosts_xp_in_agent(db):
     # Base: 10 min × 1 XP/min = 10. With 1.1× perk → 11.
     assert xp_row is not None
     assert xp_row["xp"] == 11
+
+
+# ── perk viewer in GET /places ────────────────────────────────────────────────
+
+def test_places_response_includes_perks_field(client, db):
+    _make_place(db, "place1", level=5)
+    data = client.get("/places").json()
+    assert len(data) == 1
+    assert "perks" in data[0]
+    assert data[0]["perks"] == []
+
+
+def test_places_perks_empty_when_none_donated(client, db):
+    _make_place(db, "place1", level=5)
+    resp = client.get("/places/place1")
+    assert resp.status_code == 200
+    assert resp.json()["perks"] == []
+
+
+def test_places_perks_shows_donated_item(client, db):
+    _make_place(db, "place1", level=5)
+    _make_item(db, "tome_epic", "EPIC")
+    _make_instance(db, "inst1", "tome_epic")
+    client.post("/places/place1/donate", json={"instance_id": "inst1"})
+
+    data = client.get("/places/place1").json()
+    assert len(data["perks"]) == 1
+    perk = data["perks"][0]
+    assert perk["item_id"] == "tome_epic"
+    assert perk["item_name"] == "tome_epic"
+    assert perk["item_rarity"] == "EPIC"
+    assert perk["boost_factor"] == pytest.approx(0.10)
+
+
+def test_places_list_perks_grouped_by_place(client, db):
+    _make_place(db, "place1", level=5)
+    _make_place(db, "place2", level=5)
+    _make_item(db, "book_a")
+    _make_item(db, "book_b")
+    _make_instance(db, "inst_a", "book_a")
+    _make_instance(db, "inst_b", "book_b")
+    client.post("/places/place1/donate", json={"instance_id": "inst_a"})
+    client.post("/places/place2/donate", json={"instance_id": "inst_b"})
+
+    places = client.get("/places").json()
+    p1 = next(p for p in places if p["place_id"] == "place1")
+    p2 = next(p for p in places if p["place_id"] == "place2")
+    assert len(p1["perks"]) == 1
+    assert p1["perks"][0]["item_id"] == "book_a"
+    assert len(p2["perks"]) == 1
+    assert p2["perks"][0]["item_id"] == "book_b"
+
+
+def test_places_multiple_perks_on_same_place(client, db):
+    _make_place(db, "place1", level=5)
+    _make_item(db, "item_x")
+    _make_item(db, "item_y")
+    _make_instance(db, "inst_x", "item_x")
+    _make_instance(db, "inst_y", "item_y")
+    client.post("/places/place1/donate", json={"instance_id": "inst_x"})
+    client.post("/places/place1/donate", json={"instance_id": "inst_y"})
+
+    data = client.get("/places/place1").json()
+    assert len(data["perks"]) == 2
+    item_ids = {p["item_id"] for p in data["perks"]}
+    assert item_ids == {"item_x", "item_y"}

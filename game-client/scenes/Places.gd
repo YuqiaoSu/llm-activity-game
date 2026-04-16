@@ -132,6 +132,28 @@ func _make_card(place: Dictionary) -> Control:
 		lvl_lbl.add_theme_font_size_override("font_size", 10)
 		vbox.add_child(lvl_lbl)
 
+	# ── donated perks (only for unlocked places that have received donations) ──
+	if unlocked:
+		var perks: Array = place.get("perks", [])
+		if perks.size() > 0:
+			var perk_hdr := Label.new()
+			perk_hdr.text = "  Perks:"
+			perk_hdr.modulate = Color(1.0, 0.8, 0.3)   # amber
+			perk_hdr.add_theme_font_size_override("font_size", 10)
+			vbox.add_child(perk_hdr)
+			for raw_perk in perks:
+				if not raw_perk is Dictionary:
+					continue
+				var perk := raw_perk as Dictionary
+				var pname: String  = perk.get("item_name", perk.get("item_id", "?"))
+				var prarity: String = str(perk.get("item_rarity", "")).capitalize()
+				var boost: float   = float(perk.get("boost_factor", 0.10)) * 100.0
+				var perk_lbl := Label.new()
+				perk_lbl.text = "    🎁 %s [%s] · +%.0f%% XP" % [pname, prarity, boost]
+				perk_lbl.modulate = Color(1.0, 0.85, 0.5)
+				perk_lbl.add_theme_font_size_override("font_size", 10)
+				vbox.add_child(perk_lbl)
+
 	# ── slot rows (only for unlocked places with slots) ─────────────────────
 	var slots: Array = place.get("slots", [])
 	if unlocked and slots.size() > 0:
