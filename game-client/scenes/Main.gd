@@ -46,6 +46,9 @@ func _ready() -> void:
 	$VBox/Buttons/ChallengesButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Challenges.tscn")
 	)
+	$VBox/Buttons/InboxButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/NotificationCenter.tscn")
+	)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 

@@ -73,6 +73,9 @@ text = "Achievements →"
 [node name="ChallengesButton" type="Button" parent="VBox/Buttons"]
 text = "Challenges →"
 
+[node name="InboxButton" type="Button" parent="VBox/Buttons"]
+text = "Inbox →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

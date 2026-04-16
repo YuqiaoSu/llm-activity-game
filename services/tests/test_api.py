@@ -358,6 +358,75 @@ def test_discard_item_placed_returns_409(client, seeded_db):
     assert r.status_code == 409
 
 
+def _insert_notif(db, event_type: str, acked: int = 0) -> str:
+    import uuid
+    nid = str(uuid.uuid4())
+    db.execute(
+        "INSERT INTO pending_notifications "
+        "(notification_id, character_id, event_type, payload, created_at, acknowledged) "
+        "VALUES (?, 'player_default', ?, '{}', '2026-04-14T00:00:00+00:00', ?)",
+        (nid, event_type, acked),
+    )
+    db.commit()
+    return nid
+
+
+def test_get_inbox_empty(client):
+    r = client.get("/notifications/inbox")
+    assert r.status_code == 200
+    assert r.json() == []
+
+
+def test_get_inbox_returns_all_types(client, seeded_db):
+    _insert_notif(seeded_db, "item_drop")
+    _insert_notif(seeded_db, "level_up")
+    r = client.get("/notifications/inbox")
+    assert r.status_code == 200
+    types = {e["event_type"] for e in r.json()}
+    assert "item_drop" in types
+    assert "level_up" in types
+
+
+def test_get_inbox_includes_acknowledged(client, seeded_db):
+    _insert_notif(seeded_db, "item_drop", acked=1)
+    r = client.get("/notifications/inbox")
+    assert r.status_code == 200
+    assert len(r.json()) == 1
+
+
+def test_get_inbox_filter_by_type(client, seeded_db):
+    _insert_notif(seeded_db, "item_drop")
+    _insert_notif(seeded_db, "level_up")
+    r = client.get("/notifications/inbox?event_type=level_up")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data) == 1
+    assert data[0]["event_type"] == "level_up"
+
+
+def test_get_inbox_limit_param(client, seeded_db):
+    for _ in range(5):
+        _insert_notif(seeded_db, "item_drop")
+    r = client.get("/notifications/inbox?limit=3")
+    assert r.status_code == 200
+    assert len(r.json()) == 3
+
+
+def test_get_inbox_newest_first(client, seeded_db):
+    import uuid
+    for i in range(3):
+        seeded_db.execute(
+            "INSERT INTO pending_notifications "
+            "(notification_id, character_id, event_type, payload, created_at) "
+            "VALUES (?, 'player_default', 'item_drop', '{}', ?)",
+            (str(uuid.uuid4()), "2026-04-1%dT00:00:00+00:00" % (i + 1)),
+        )
+    seeded_db.commit()
+    data = client.get("/notifications/inbox").json()
+    dates = [e["created_at"] for e in data]
+    assert dates == sorted(dates, reverse=True)
+
+
 def test_poll_now_no_new_chunks(client, monkeypatch):
     from services.sync_agent import tracker_client as tc_module
     monkeypatch.setattr(

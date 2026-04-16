@@ -17,6 +17,7 @@ signal history_updated(entries: Array)
 signal achievements_updated(entries: Array)
 signal challenges_updated(entries: Array)
 signal daily_stats_updated(entries: Array)
+signal inbox_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -91,6 +92,18 @@ func fetch_daily_stats(days: int = 7) -> void:
 			daily_stats_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /stats/daily response is not an Array")
+	)
+
+
+func fetch_inbox(limit: int = 50, event_type: String = "") -> void:
+	var path := "/notifications/inbox?limit=%d" % limit
+	if not event_type.is_empty():
+		path += "&event_type=" + event_type
+	_http_get(path, func(data) -> void:
+		if data is Array:
+			inbox_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /notifications/inbox response is not an Array")
 	)
 
 
