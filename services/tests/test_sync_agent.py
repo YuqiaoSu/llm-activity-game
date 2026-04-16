@@ -286,3 +286,50 @@ def test_xp_multiplier_applied_during_poll(db):
     # 600 sec = 10 min × 1 XP/min × 2× multiplier = 20 XP
     assert row is not None
     assert row["xp_awarded"] == 20
+
+
+def test_streak_bonus_applied_at_threshold(db):
+    """A 3-day streak applies a 1.1× XP bonus on top of base XP."""
+    from services.progression.streak import update_streak
+    from datetime import date
+
+    # Build a 3-day consecutive streak before polling
+    for delta in range(3):
+        d = date(2026, 4, 13 + delta)  # 13, 14, 15
+        update_streak(db, d)
+    db.commit()
+
+    chunks = [{"chunk_id": "streak_bonus_001", "label": "WORK", "duration_sec": 600,
+               "confidence": 0.9, "started_at": "2026-04-15T10:00:00+00:00", "time_of_day": "morning"}]
+    agent = _make_agent(db, chunks, "streak_bonus_001")
+    agent.poll()
+
+    row = db.execute(
+        "SELECT xp_awarded FROM chunk_log WHERE chunk_id='streak_bonus_001'"
+    ).fetchone()
+    # 600 sec = 10 min × 1 XP/min × 1.1 streak bonus = 11 XP
+    assert row is not None
+    assert row["xp_awarded"] == 11
+
+
+def test_streak_bonus_not_applied_below_threshold(db):
+    """A 2-day streak does NOT apply the 1.1× bonus (threshold is 3)."""
+    from services.progression.streak import update_streak
+    from datetime import date
+
+    for delta in range(2):
+        d = date(2026, 4, 14 + delta)  # 14, 15
+        update_streak(db, d)
+    db.commit()
+
+    chunks = [{"chunk_id": "streak_no_bonus_001", "label": "WORK", "duration_sec": 600,
+               "confidence": 0.9, "started_at": "2026-04-15T10:00:00+00:00", "time_of_day": "morning"}]
+    agent = _make_agent(db, chunks, "streak_no_bonus_001")
+    agent.poll()
+
+    row = db.execute(
+        "SELECT xp_awarded FROM chunk_log WHERE chunk_id='streak_no_bonus_001'"
+    ).fetchone()
+    # No bonus: 10 XP base only
+    assert row is not None
+    assert row["xp_awarded"] == 10

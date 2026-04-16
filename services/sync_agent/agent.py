@@ -15,7 +15,10 @@ from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
 from services.place_service.service import list_places, check_unlock_condition
 from services.place_service.effects import load_active_effects
-from services.progression.streak import update_streak
+from services.progression.streak import update_streak, get_streak
+
+_STREAK_BONUS_THRESHOLD = 3
+_STREAK_BONUS_FACTOR = 1.1
 
 
 class PollResult(str, Enum):
@@ -140,6 +143,10 @@ class SyncAgent:
         active_effects = load_active_effects(self.db)
         drop_mods = self._aggregate_drop_mods(active_effects)
         xp_multiplier = self._aggregate_xp_multiplier(active_effects)
+
+        streak = get_streak(self.db)
+        if streak["current_streak"] >= _STREAK_BONUS_THRESHOLD:
+            xp_multiplier *= _STREAK_BONUS_FACTOR
 
         for raw in chunk_dicts:
             try:
