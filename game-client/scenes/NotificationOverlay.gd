@@ -20,6 +20,7 @@ func _ready() -> void:
 	NotificationBus.level_up_occurred.connect(_show_drop)
 	NotificationBus.place_unlocked.connect(_show_drop)
 	NotificationBus.achievement_unlocked.connect(_show_drop)
+	NotificationBus.challenge_completed.connect(_show_drop)
 	_ok_button.pressed.connect(_on_ok)
 
 
@@ -32,6 +33,8 @@ func _exit_tree() -> void:
 		NotificationBus.place_unlocked.disconnect(_show_drop)
 	if NotificationBus.achievement_unlocked.is_connected(_show_drop):
 		NotificationBus.achievement_unlocked.disconnect(_show_drop)
+	if NotificationBus.challenge_completed.is_connected(_show_drop):
+		NotificationBus.challenge_completed.disconnect(_show_drop)
 
 
 func _show_drop(notif: Dictionary) -> void:
@@ -63,7 +66,12 @@ func _display(notif: Dictionary) -> void:
 			_title_label.text = "Achievement Unlocked!"
 			_item_name.text = str(payload.get("name", "Achievement"))
 			_rarity_label.text = ""
-			_rarity_bar.color = Color(1.0, 0.84, 0.0)   # gold star
+			_rarity_bar.color = Color(1.0, 0.84, 0.0)   # gold
+		"challenge_complete":
+			_title_label.text = "Challenge Complete!"
+			_item_name.text = str(payload.get("name", "Challenge"))
+			_rarity_label.text = "Weekly Goal"
+			_rarity_bar.color = Color(0.20, 0.80, 1.00)  # cyan-blue
 		_:  # item_drop and unknown types
 			_title_label.text = "Item Dropped!"
 			var rarity: String = payload.get("rarity", "COMMON")
