@@ -42,21 +42,26 @@ def get_inventory(request: Request) -> list[dict]:
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
             json_extract(d.data, '$.icon')         AS icon,
-            json_extract(d.data, '$.effects')      AS effects_json
+            json_extract(d.data, '$.description')  AS description,
+            json_extract(d.data, '$.effects')      AS effects_json,
+            c.first_seen_at
         FROM inventory i
         LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        LEFT JOIN collection_log c
+            ON i.item_id = c.item_id AND c.player_id = 'player_default'
         WHERE i.character_id = 'player_default'
         GROUP BY i.item_id, i.character_id
         ORDER BY last_acquired_at DESC
         """
     ).fetchall()
-    import json
+    import json as _json
     result = []
     for row in rows:
         d = dict(row)
         # Parse effects_json into a list so the client gets structured data
         raw_effects = d.pop("effects_json", None)
-        d["effects"] = json.loads(raw_effects) if raw_effects else []
+        d["effects"] = _json.loads(raw_effects) if raw_effects else []
+        d["description"] = d.get("description") or ""
         result.append(d)
     return result
 
