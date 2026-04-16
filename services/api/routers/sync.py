@@ -16,7 +16,7 @@ def get_sync_status(request: Request) -> dict:
 @router.post("/poll-now")
 def poll_now(request: Request) -> dict:
     try:
-        result = request.app.state.sync_agent.poll(manual=True)
+        summary = request.app.state.sync_agent.poll_with_summary(manual=True)
     except httpx.HTTPError:
         raise HTTPException(status_code=503, detail="Tracker unavailable")
-    return {"result": result.value}
+    return summary

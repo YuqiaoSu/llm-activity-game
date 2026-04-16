@@ -265,3 +265,51 @@ class SyncAgent:
         self.db.commit()
 
         return PollResult.OK
+
+    def poll_with_summary(self, manual: bool = False) -> dict:
+        """Like poll(), but returns a richer dict for the session-summary popup.
+
+        Keys: result (str), total_xp (int), xp_by_category (dict),
+              chunks_processed (int), drops_earned (int).
+        """
+        # Count drops before poll so we can diff after
+        drops_before: int = self.db.execute(
+            "SELECT COUNT(*) FROM reward_ledger WHERE character_id=?",
+            (self.character_id,),
+        ).fetchone()[0]
+
+        # Run the normal poll
+        result = self.poll(manual=manual)
+        if result != PollResult.OK:
+            return {"result": result.value, "total_xp": 0, "xp_by_category": {},
+                    "chunks_processed": 0, "drops_earned": 0}
+
+        # Count drops after poll
+        drops_after: int = self.db.execute(
+            "SELECT COUNT(*) FROM reward_ledger WHERE character_id=?",
+            (self.character_id,),
+        ).fetchone()[0]
+
+        # Aggregate XP from chunk_log processed in this poll (since last cursor save,
+        # approximate via latest processed_at — use chunk count as proxy)
+        recent_rows = self.db.execute(
+            """
+            SELECT category, SUM(xp_awarded) AS xp, COUNT(*) AS cnt
+            FROM chunk_log
+            WHERE processed_at >= DATETIME('now', '-5 minutes')
+            GROUP BY category
+            """
+        ).fetchall()
+        xp_by_cat: dict[str, int] = {}
+        chunks: int = 0
+        for row in recent_rows:
+            xp_by_cat[row["category"]] = row["xp"]
+            chunks += row["cnt"]
+
+        return {
+            "result": result.value,
+            "total_xp": sum(xp_by_cat.values()),
+            "xp_by_category": xp_by_cat,
+            "chunks_processed": chunks,
+            "drops_earned": drops_after - drops_before,
+        }

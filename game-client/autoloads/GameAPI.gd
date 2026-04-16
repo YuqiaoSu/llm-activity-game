@@ -9,6 +9,7 @@ signal profile_updated(data: Dictionary)
 signal inventory_updated(items: Array)
 signal notifications_updated(notifs: Array)
 signal poll_completed(result: String)
+signal poll_summary_ready(summary: Dictionary)
 signal equip_updated(item_id: String, equipped: bool)
 signal item_discarded(instance_id: String)
 signal places_updated(places: Array)
@@ -257,15 +258,18 @@ func equip_item(item_id: String, equipped: bool) -> void:
 
 
 func poll_now() -> void:
-    _http_post("/sync/poll-now", func(code: int, data: Dictionary) -> void:
-        match code:
-            200:
-                poll_completed.emit(data.get("result", "UNKNOWN"))
-            503:
-                poll_completed.emit("ON_COOLDOWN")
-            _:
-                poll_completed.emit("ERROR")
-    )
+	_http_post("/sync/poll-now", func(code: int, data: Dictionary) -> void:
+		match code:
+			200:
+				var result: String = data.get("result", "UNKNOWN")
+				poll_completed.emit(result)
+				if result == "OK":
+					poll_summary_ready.emit(data)
+			503:
+				poll_completed.emit("ON_COOLDOWN")
+			_:
+				poll_completed.emit("ERROR")
+	)
 
 
 # ── internal helpers ──────────────────────────────────────────────────────────

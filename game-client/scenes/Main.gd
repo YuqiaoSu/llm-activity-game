@@ -27,6 +27,7 @@ const _ALL_CATEGORIES := ["WORK", "GAME", "VIDEO", "SOCIAL", "EXPLORE", "SLEEP",
 func _ready() -> void:
 	GameAPI.profile_updated.connect(_on_profile)
 	GameAPI.poll_completed.connect(_on_poll_result)
+	GameAPI.poll_summary_ready.connect(_on_poll_summary)
 	_poll_button.pressed.connect(_on_poll_pressed)
 	$VBox/Buttons/InventoryButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Inventory.tscn")
@@ -79,6 +80,8 @@ func _exit_tree() -> void:
 		GameAPI.profile_updated.disconnect(_on_profile)
 	if GameAPI.poll_completed.is_connected(_on_poll_result):
 		GameAPI.poll_completed.disconnect(_on_poll_result)
+	if GameAPI.poll_summary_ready.is_connected(_on_poll_summary):
+		GameAPI.poll_summary_ready.disconnect(_on_poll_summary)
 
 
 func _on_profile(data: Dictionary) -> void:
@@ -163,3 +166,43 @@ func _on_poll_result(result: String) -> void:
 			_poll_status.text = "On cooldown — try again shortly"
 		_:
 			_poll_status.text = "Sync error — is the tracker running?"
+
+
+func _on_poll_summary(summary: Dictionary) -> void:
+	var total_xp: int = summary.get("total_xp", 0) as int
+	if total_xp <= 0:
+		return   # nothing interesting to show
+
+	var drops: int = summary.get("drops_earned", 0) as int
+	var chunks: int = summary.get("chunks_processed", 0) as int
+	var by_cat: Dictionary = summary.get("xp_by_category", {}) as Dictionary
+
+	# Build summary text
+	var lines: PackedStringArray = [
+		"Session Summary",
+		"",
+		"+%d XP total  ·  %d chunk%s  ·  %d drop%s" % [
+			total_xp, chunks, "s" if chunks != 1 else "",
+			drops, "s" if drops != 1 else "",
+		],
+	]
+	for cat in by_cat:
+		var xp: int = by_cat.get(cat, 0) as int
+		if xp > 0:
+			lines.append("  %s: +%d XP" % [str(cat).capitalize(), xp])
+
+	# Show as a temporary overlay label at the top of the screen
+	var popup := Label.new()
+	popup.text = "\n".join(lines)
+	popup.modulate = Color(0.9, 1.0, 0.6)
+	popup.add_theme_font_size_override("font_size", 13)
+	popup.position = Vector2(20, 80)
+	popup.z_index = 10
+	add_child(popup)
+
+	# Auto-remove after 5 seconds
+	var timer := get_tree().create_timer(5.0)
+	timer.timeout.connect(func() -> void:
+		if is_instance_valid(popup):
+			popup.queue_free()
+	)
