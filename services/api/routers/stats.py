@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Request
 from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage
+from services.progression.streak import get_streak
 
 router = APIRouter()
 
@@ -37,6 +38,8 @@ def get_stats(request: Request) -> dict:
         "SELECT COUNT(*) FROM places WHERE state='UNLOCKED'"
     ).fetchone()[0]
 
+    streak = get_streak(db)
+
     return {
         "total_xp": total_xp,
         "level": level,
@@ -46,4 +49,6 @@ def get_stats(request: Request) -> dict:
         "chunks_processed": chunks_processed,
         "drops_total": drops_total,
         "places_unlocked": places_unlocked,
+        "current_streak": streak["current_streak"],
+        "longest_streak": streak["longest_streak"],
     }

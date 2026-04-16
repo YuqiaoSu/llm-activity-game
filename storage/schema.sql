@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS chunk_log (
     processed_at  TEXT NOT NULL
 );
 
+-- streak_state: tracks consecutive-day activity for the player
+CREATE TABLE IF NOT EXISTS streak_state (
+    player_id        TEXT PRIMARY KEY DEFAULT 'default',
+    current_streak   INTEGER NOT NULL DEFAULT 0,
+    longest_streak   INTEGER NOT NULL DEFAULT 0,
+    last_active_date TEXT    -- ISO date YYYY-MM-DD of last day XP was earned; NULL = never
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,

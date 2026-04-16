@@ -15,6 +15,7 @@ from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
 from services.place_service.service import list_places, check_unlock_condition
 from services.place_service.effects import load_active_effects
+from services.progression.streak import update_streak
 
 
 class PollResult(str, Enum):
@@ -205,5 +206,9 @@ class SyncAgent:
 
         if new_cursor:
             self._save_cursor(new_cursor)
+
+        # Record activity for today's streak (UTC date of poll, not chunk date)
+        update_streak(self.db, datetime.now(timezone.utc).date())
+        self.db.commit()
 
         return PollResult.OK
