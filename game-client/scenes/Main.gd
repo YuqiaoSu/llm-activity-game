@@ -19,6 +19,9 @@ const _STAGE_COLORS := [
 ]
 const _STAGE_NAMES := ["Hatchling", "Growing", "Mature", "Legendary"]
 const _MAX_XP_PER_CAT := 5000
+# All categories defined on the backend (services/models/enums.py Category enum).
+# Listed here so bars always appear even if a category has never been active.
+const _ALL_CATEGORIES := ["WORK", "GAME", "VIDEO", "SOCIAL", "EXPLORE", "SLEEP", "SPECIAL"]
 
 
 func _ready() -> void:
@@ -83,17 +86,17 @@ func _on_profile(data: Dictionary) -> void:
 func _rebuild_xp_bars(category_xp: Dictionary) -> void:
 	for child in _category_container.get_children():
 		child.queue_free()
-	for category: String in category_xp:
+	for category: String in _ALL_CATEGORIES:
 		var hbox := HBoxContainer.new()
 		var lbl := Label.new()
 		lbl.text = category.capitalize()
 		lbl.custom_minimum_size.x = 80
 		var bar := ProgressBar.new()
 		bar.max_value = _MAX_XP_PER_CAT
-		var raw = category_xp[category]
+		var raw = category_xp.get(category, 0)
 		if not (raw is int or raw is float):
 			push_warning("Main: unexpected XP type for '%s'" % category)
-			continue
+			raw = 0
 		bar.value = int(raw)
 		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		bar.show_percentage = false
