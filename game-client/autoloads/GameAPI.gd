@@ -24,6 +24,7 @@ signal challenge_rerolled(ok: bool, data: Dictionary)
 signal collection_updated(entries: Array)
 signal suggestions_updated(entries: Array)
 signal fuse_completed(ok: bool, data: Dictionary)
+signal craft_completed(ok: bool, data: Dictionary)
 signal daily_goals_updated(entries: Array)
 signal recap_updated(data: Dictionary)
 signal catalogue_updated(items: Array)
@@ -180,6 +181,13 @@ func fetch_daily_goals() -> void:
 		else:
 			push_error("GameAPI: /goals/daily response is not an Array")
 	)
+
+
+func craft_items(item_id_a: String, item_id_b: String) -> void:
+	var body_str := JSON.stringify({"item_id_a": item_id_a, "item_id_b": item_id_b})
+	_http_post("/inventory/craft", func(code: int, data: Dictionary) -> void:
+		craft_completed.emit(code == 200, data)
+	, body_str)
 
 
 func fuse_item(item_id: String) -> void:

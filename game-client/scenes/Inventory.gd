@@ -6,6 +6,13 @@ const RarityColor := preload("res://utils/RarityColor.gd")
 @onready var _count_label: Label       = $VBox/Header/CountLabel
 @onready var _item_list: VBoxContainer = $VBox/Scroll/ItemList
 
+# Craft-mode state
+var _craft_slot_a: Dictionary = {}   # item dict for first craft selection
+var _craft_slot_b: Dictionary = {}   # item dict for second craft selection
+var _craft_panel: VBoxContainer      # created dynamically; shown when a slot is filled
+
+var _items_cache: Array = []         # last received inventory array
+
 
 func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
@@ -15,6 +22,7 @@ func _ready() -> void:
 	GameAPI.equip_updated.connect(_on_equip_updated)
 	GameAPI.item_discarded.connect(_on_item_discarded)
 	GameAPI.fuse_completed.connect(_on_fuse_completed)
+	GameAPI.craft_completed.connect(_on_craft_completed)
 	GameAPI.fetch_inventory()
 
 
@@ -27,6 +35,8 @@ func _exit_tree() -> void:
 		GameAPI.item_discarded.disconnect(_on_item_discarded)
 	if GameAPI.fuse_completed.is_connected(_on_fuse_completed):
 		GameAPI.fuse_completed.disconnect(_on_fuse_completed)
+	if GameAPI.craft_completed.is_connected(_on_craft_completed):
+		GameAPI.craft_completed.disconnect(_on_craft_completed)
 
 
 func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
@@ -41,15 +51,124 @@ func _on_fuse_completed(_ok: bool, _data: Dictionary) -> void:
 	GameAPI.fetch_inventory()
 
 
+func _on_craft_completed(ok: bool, _data: Dictionary) -> void:
+	_craft_slot_a = {}
+	_craft_slot_b = {}
+	if ok:
+		GameAPI.fetch_inventory()
+	else:
+		_rebuild_list(_items_cache)
+
+
 func _on_inventory(items: Array) -> void:
+	_items_cache = items
 	_count_label.text = "Inventory (%d)" % items.size()
+	_rebuild_list(items)
+
+
+func _rebuild_list(items: Array) -> void:
 	for child in _item_list.get_children():
 		child.queue_free()
+	_craft_panel = null
+
+	# Craft summary panel (shown when at least one slot is filled)
+	if not _craft_slot_a.is_empty() or not _craft_slot_b.is_empty():
+		_craft_panel = _make_craft_panel()
+		_item_list.add_child(_craft_panel)
+
 	for raw in items:
 		if not raw is Dictionary:
 			push_warning("Inventory: skipping non-Dictionary item: %s" % str(raw))
 			continue
 		_item_list.add_child(_make_card(raw as Dictionary))
+
+
+func _make_craft_panel() -> VBoxContainer:
+	var panel := VBoxContainer.new()
+	panel.modulate = Color(0.85, 1.0, 0.85)
+
+	var title := Label.new()
+	title.text = "Craft"
+	title.add_theme_font_size_override("font_size", 13)
+	panel.add_child(title)
+
+	var row := HBoxContainer.new()
+
+	var slot_a_lbl := Label.new()
+	slot_a_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if _craft_slot_a.is_empty():
+		slot_a_lbl.text = "[pick item A]"
+		slot_a_lbl.modulate = Color(0.6, 0.6, 0.6)
+	else:
+		slot_a_lbl.text = _craft_slot_a.get("name", _craft_slot_a.get("item_id", "?"))
+		slot_a_lbl.modulate = RarityColor.for_rarity(_craft_slot_a.get("rarity", "COMMON"))
+	row.add_child(slot_a_lbl)
+
+	var plus_lbl := Label.new()
+	plus_lbl.text = " + "
+	row.add_child(plus_lbl)
+
+	var slot_b_lbl := Label.new()
+	slot_b_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if _craft_slot_b.is_empty():
+		slot_b_lbl.text = "[pick item B]"
+		slot_b_lbl.modulate = Color(0.6, 0.6, 0.6)
+	else:
+		slot_b_lbl.text = _craft_slot_b.get("name", _craft_slot_b.get("item_id", "?"))
+		slot_b_lbl.modulate = RarityColor.for_rarity(_craft_slot_b.get("rarity", "COMMON"))
+	row.add_child(slot_b_lbl)
+
+	panel.add_child(row)
+
+	var btn_row := HBoxContainer.new()
+
+	# Craft button — active only when both slots are filled
+	if not _craft_slot_a.is_empty() and not _craft_slot_b.is_empty():
+		var craft_btn := Button.new()
+		craft_btn.text = "Craft!"
+		craft_btn.modulate = Color(0.4, 1.0, 0.6)
+		craft_btn.pressed.connect(func() -> void:
+			GameAPI.craft_items(
+				_craft_slot_a.get("item_id", ""),
+				_craft_slot_b.get("item_id", ""),
+			)
+		)
+		btn_row.add_child(craft_btn)
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.modulate = Color(0.9, 0.5, 0.5)
+	cancel_btn.pressed.connect(func() -> void:
+		_craft_slot_a = {}
+		_craft_slot_b = {}
+		_rebuild_list(_items_cache)
+	)
+	btn_row.add_child(cancel_btn)
+	panel.add_child(btn_row)
+
+	return panel
+
+
+func _select_for_craft(item: Dictionary) -> void:
+	var item_id: String = item.get("item_id", "")
+	# Deselect if already in a slot
+	if _craft_slot_a.get("item_id", "") == item_id:
+		_craft_slot_a = {}
+		_rebuild_list(_items_cache)
+		return
+	if _craft_slot_b.get("item_id", "") == item_id:
+		_craft_slot_b = {}
+		_rebuild_list(_items_cache)
+		return
+	# Fill first empty slot
+	if _craft_slot_a.is_empty():
+		_craft_slot_a = item
+	elif _craft_slot_b.is_empty():
+		_craft_slot_b = item
+	else:
+		# Both filled — replace slot A
+		_craft_slot_a = item
+	_rebuild_list(_items_cache)
 
 
 func _make_card(item: Dictionary) -> Control:
@@ -113,6 +232,22 @@ func _make_card(item: Dictionary) -> Control:
 			GameAPI.fuse_item(fuse_item_id)
 		)
 		hbox.add_child(fuse_btn)
+
+	# Craft button — select this item for combining with another of the same category
+	var in_slot_a: bool = _craft_slot_a.get("item_id", "") == item_id
+	var in_slot_b: bool = _craft_slot_b.get("item_id", "") == item_id
+	var craft_sel_btn := Button.new()
+	if in_slot_a or in_slot_b:
+		craft_sel_btn.text = "Deselect"
+		craft_sel_btn.modulate = Color(1.0, 0.8, 0.4)   # amber = selected
+	else:
+		craft_sel_btn.text = "Craft"
+		craft_sel_btn.modulate = Color(0.75, 1.0, 0.55)  # light green
+	var craft_item_snapshot := item.duplicate()
+	craft_sel_btn.pressed.connect(func() -> void:
+		_select_for_craft(craft_item_snapshot)
+	)
+	hbox.add_child(craft_sel_btn)
 
 	vbox.add_child(hbox)
 
