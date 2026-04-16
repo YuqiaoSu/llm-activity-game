@@ -94,6 +94,9 @@ text = "Catalogue →"
 [node name="LeaderboardButton" type="Button" parent="VBox/Buttons"]
 text = "Bests →"
 
+[node name="ChartButton" type="Button" parent="VBox/Buttons"]
+text = "Chart →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

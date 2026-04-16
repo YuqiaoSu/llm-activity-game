@@ -67,6 +67,9 @@ func _ready() -> void:
 	$VBox/Buttons/LeaderboardButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Leaderboard.tscn")
 	)
+	$VBox/Buttons/ChartButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/DailyChart.tscn")
+	)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 

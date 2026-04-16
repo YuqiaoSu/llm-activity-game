@@ -27,6 +27,7 @@ signal daily_goals_updated(entries: Array)
 signal recap_updated(data: Dictionary)
 signal catalogue_updated(items: Array)
 signal leaderboard_updated(data: Dictionary)
+signal daily_chart_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -78,12 +79,21 @@ func fetch_stats() -> void:
 
 
 func fetch_history() -> void:
-    _http_get("/history", func(data) -> void:
-        if data is Array:
-            history_updated.emit(data as Array)
-        else:
-            push_error("GameAPI: /history response is not an Array")
-    )
+	_http_get("/history", func(data) -> void:
+		if data is Array:
+			history_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /history response is not an Array")
+	)
+
+
+func fetch_daily_chart(days: int = 14) -> void:
+	_http_get("/history/daily?days=%d" % days, func(data) -> void:
+		if data is Array:
+			daily_chart_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /history/daily response is not an Array")
+	)
 
 
 func fetch_achievements() -> void:
