@@ -17,6 +17,7 @@ var _items_cache: Array = []         # last received inventory array
 const _RARITY_ORDER := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 var _filter_category: String = ""    # "" = all
 var _filter_rarity: String   = ""    # "" = all
+var _filter_search: String   = ""    # "" = all; substring match on name/item_id
 var _sort_mode: String       = "name"  # "name" | "rarity" | "quantity"
 
 # Filter/sort row (created once in _ready)
@@ -86,8 +87,19 @@ func _on_inventory(items: Array) -> void:
 func _make_filter_row() -> HBoxContainer:
 	var row := HBoxContainer.new()
 
+	# Search box
+	var search := LineEdit.new()
+	search.placeholder_text = "Search…"
+	search.custom_minimum_size.x = 80
+	search.add_theme_font_size_override("font_size", 11)
+	search.text_changed.connect(func(t: String) -> void:
+		_filter_search = t.strip_edges().to_lower()
+		_rebuild_list(_items_cache)
+	)
+	row.add_child(search)
+
 	var cat_label := Label.new()
-	cat_label.text = "Category:"
+	cat_label.text = "  Cat:"
 	cat_label.add_theme_font_size_override("font_size", 11)
 	row.add_child(cat_label)
 
@@ -143,6 +155,10 @@ func _apply_filter_sort(items: Array) -> Array:
 			continue
 		if _filter_rarity != "" and item.get("rarity", "") != _filter_rarity:
 			continue
+		if _filter_search != "":
+			var name_lower: String = str(item.get("name", item.get("item_id", ""))).to_lower()
+			if not name_lower.contains(_filter_search):
+				continue
 		result.append(item)
 
 	match _sort_mode:
