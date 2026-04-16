@@ -11,6 +11,7 @@ from services.seeds.places import SEED_PLACES
 from services.seeds.achievements import SEED_ACHIEVEMENTS
 from services.seeds.weekly_challenges import SEED_WEEKLY_CHALLENGES
 from services.seeds.events import get_seed_events
+from services.seeds.trade import seed_trade_offers
 
 
 def seed(db_path: str = "game.db") -> None:
@@ -74,6 +75,10 @@ def seed(db_path: str = "game.db") -> None:
     # Sync state
     conn.execute("INSERT OR IGNORE INTO sync_state (player_id) VALUES ('default')")
     print("  Sync state initialized.")
+
+    # Trade offers
+    n_trades = seed_trade_offers(conn)
+    print(f"  {n_trades} trade offers seeded.")
 
     conn.commit()
     conn.close()

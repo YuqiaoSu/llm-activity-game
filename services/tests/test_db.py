@@ -14,6 +14,7 @@ def test_init_db_creates_all_tables():
         "streak_state", "achievements", "player_achievements",
         "weekly_challenges", "player_weekly_progress", "weekly_reroll_state",
         "collection_log", "daily_goals", "challenge_events", "place_perks",
+        "trade_offers",
     }
     assert expected == tables
     conn.close()

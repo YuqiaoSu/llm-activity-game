@@ -34,6 +34,8 @@ signal events_updated(entries: Array)
 signal active_events_updated(entries: Array)
 signal donation_completed(ok: bool, data: Dictionary)
 signal heatmap_updated(entries: Array)
+signal trade_offers_updated(offers: Array)
+signal trade_accepted(ok: bool, data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -299,6 +301,22 @@ func fetch_active_events() -> void:
 		else:
 			push_error("GameAPI: /events/active response is not an Array")
 	)
+
+
+func fetch_trade_offers() -> void:
+	_http_get("/trade/offers", func(data) -> void:
+		if data is Array:
+			trade_offers_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /trade/offers response is not an Array")
+	)
+
+
+func accept_trade(offer_id: String) -> void:
+	var body_str := JSON.stringify({"offer_id": offer_id})
+	_http_post("/trade/accept", func(code: int, data: Dictionary) -> void:
+		trade_accepted.emit(code == 200, data)
+	, body_str)
 
 
 func fetch_heatmap(weeks: int = 12) -> void:

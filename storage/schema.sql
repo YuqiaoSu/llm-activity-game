@@ -211,6 +211,20 @@ CREATE TABLE IF NOT EXISTS challenge_events (
     ends_at     TEXT NOT NULL            -- ISO datetime (UTC)
 );
 
+-- trade_offers: static NPC exchange offers (exchange N items of one rarity for 1 of another)
+-- from_category / to_category are nullable; NULL means any category accepted / random output.
+CREATE TABLE IF NOT EXISTS trade_offers (
+    offer_id       TEXT PRIMARY KEY,
+    trader_name    TEXT NOT NULL,        -- NPC display name
+    label          TEXT NOT NULL,        -- human-readable e.g. "3× Common → 1 Uncommon"
+    from_rarity    TEXT NOT NULL,        -- rarity tier given up (COMMON/UNCOMMON/RARE/EPIC/LEGENDARY)
+    from_qty       INTEGER NOT NULL,     -- how many items of from_rarity needed
+    from_category  TEXT,                 -- optional: restrict source items to this category
+    to_rarity      TEXT NOT NULL,        -- rarity tier received
+    to_qty         INTEGER NOT NULL DEFAULT 1,
+    to_category    TEXT                  -- optional: restrict output item to this category
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,

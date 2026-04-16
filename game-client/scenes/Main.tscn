@@ -103,6 +103,9 @@ text = "Events →"
 [node name="HeatmapButton" type="Button" parent="VBox/Buttons"]
 text = "Heatmap →"
 
+[node name="TradeButton" type="Button" parent="VBox/Buttons"]
+text = "Trade →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true
