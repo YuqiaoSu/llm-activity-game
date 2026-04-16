@@ -13,6 +13,7 @@ signal equip_updated(item_id: String, equipped: bool)
 signal places_updated(places: Array)
 signal stats_updated(data: Dictionary)
 signal history_updated(entries: Array)
+signal achievements_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -70,6 +71,15 @@ func fetch_history() -> void:
         else:
             push_error("GameAPI: /history response is not an Array")
     )
+
+
+func fetch_achievements() -> void:
+	_http_get("/achievements", func(data) -> void:
+		if data is Array:
+			achievements_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /achievements response is not an Array")
+	)
 
 
 func fetch_places() -> void:

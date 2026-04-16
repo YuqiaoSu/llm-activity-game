@@ -4,6 +4,7 @@ extends Node
 signal item_dropped(notification: Dictionary)
 signal level_up_occurred(notification: Dictionary)
 signal place_unlocked(notification: Dictionary)
+signal achievement_unlocked(notification: Dictionary)
 
 const POLL_INTERVAL_SEC := 3.0
 const MAX_SEEN_IDS := 200
@@ -47,6 +48,8 @@ func _on_notifications(notifs: Array) -> void:
 				level_up_occurred.emit(notif)
 			"place_unlock":
 				place_unlocked.emit(notif)
+			"achievement_unlock":
+				achievement_unlocked.emit(notif)
 			var unknown:
 				push_warning("NotificationBus: unknown event_type '%s'" % unknown)
 				item_dropped.emit(notif)  # fall back so it surfaces rather than silently drops

@@ -67,6 +67,9 @@ text = "Stats →"
 [node name="HistoryButton" type="Button" parent="VBox/Buttons"]
 text = "History →"
 
+[node name="AchievementsButton" type="Button" parent="VBox/Buttons"]
+text = "Achievements →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true
