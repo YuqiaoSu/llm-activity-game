@@ -58,15 +58,18 @@ func _on_profile(data: Dictionary) -> void:
 
 	var total_xp: int = data.get("total_xp", 0)
 	var xp_end = data.get("level_xp_end", null)
+	var xp_line: String
 	if xp_end != null:
 		var xp_start: int = data.get("level_xp_start", 0)
 		var progress: int = total_xp - xp_start
 		var needed: int   = (xp_end as int) - xp_start
-		_xp_label.text = "%d XP  ·  %d / %d to level %d" % [
-			total_xp, progress, needed, level + 1
-		]
+		xp_line = "%d XP  ·  %d / %d to level %d" % [total_xp, progress, needed, level + 1]
 	else:
-		_xp_label.text = "%d XP  ·  Max level!" % total_xp
+		xp_line = "%d XP  ·  Max level!" % total_xp
+	var streak_days: int = data.get("streak_days", 0)
+	if streak_days >= 2:
+		xp_line += "  ·  %d-day streak" % streak_days
+	_xp_label.text = xp_line
 
 	_rebuild_xp_bars(data.get("category_xp", {}) as Dictionary)
 

@@ -32,6 +32,12 @@ func _on_stats(data: Dictionary) -> void:
 	_add_row("Items Dropped", str(data.get("drops_total", 0)))
 	_add_row("Places Unlocked", str(data.get("places_unlocked", 0)))
 
+	var cur_streak: int = data.get("current_streak", 0)
+	var long_streak: int = data.get("longest_streak", 0)
+	var streak_text: String = "%d day%s" % [cur_streak, "s" if cur_streak != 1 else ""]
+	_add_row("Current Streak", streak_text)
+	_add_row("Longest Streak", "%d day%s" % [long_streak, "s" if long_streak != 1 else ""])
+
 	var cat_xp: Dictionary = data.get("category_xp", {})
 	for category: String in cat_xp:
 		var xp: int = cat_xp[category] as int
