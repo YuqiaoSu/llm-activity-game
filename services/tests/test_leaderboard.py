@@ -189,3 +189,94 @@ def test_trend_flat_when_equal(client, db):
 
 def test_trend_flat_when_no_activity(client):
     assert client.get("/leaderboard/weekly").json()["trend"] == "flat"
+
+
+# ── seasonal leaderboard ──────────────────────────────────────────────────────
+
+def _this_month_iso() -> str:
+    from datetime import date
+    d = date.today()
+    return f"{d.year:04d}-{d.month:02d}"
+
+
+def _add_chunk_this_month(conn, xp: int, category: str = "WORK") -> None:
+    from datetime import date
+    d = date.today()
+    ts = f"{d.year:04d}-{d.month:02d}-15T12:00:00"
+    _add_chunk(conn, xp, 600, ts, category)
+
+
+def test_seasonal_default_returns_6_months(client):
+    r = client.get("/leaderboard/seasonal")
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["months"]) == 6
+
+
+def test_seasonal_months_param(client):
+    r = client.get("/leaderboard/seasonal?months=3")
+    assert len(r.json()["months"]) == 3
+
+
+def test_seasonal_first_entry_is_current_month(client):
+    data = client.get("/leaderboard/seasonal").json()
+    assert data["months"][0]["is_current"] is True
+    assert data["months"][0]["month"] == _this_month_iso()
+
+
+def test_seasonal_top_level_fields(client):
+    data = client.get("/leaderboard/seasonal").json()
+    assert "personal_best_xp" in data
+    assert "trend" in data
+    assert "months" in data
+
+
+def test_seasonal_month_entry_shape(client):
+    entry = client.get("/leaderboard/seasonal").json()["months"][0]
+    for key in ("month", "total_xp", "active_min", "by_category", "is_current", "is_best", "rank"):
+        assert key in entry
+
+
+def test_seasonal_xp_appears_in_current_month(client, db):
+    _add_chunk_this_month(db, 150, "WORK")
+    db.commit()
+    data = client.get("/leaderboard/seasonal").json()
+    current = data["months"][0]
+    assert current["total_xp"] == 150
+    assert current["by_category"]["WORK"] == 150
+
+
+def test_seasonal_is_best_marks_highest_month(client, db):
+    _add_chunk_this_month(db, 200)
+    db.commit()
+    data = client.get("/leaderboard/seasonal").json()
+    best_months = [m for m in data["months"] if m["is_best"]]
+    assert len(best_months) == 1
+    assert best_months[0]["total_xp"] == 200
+
+
+def test_seasonal_is_best_false_when_all_zero(client):
+    data = client.get("/leaderboard/seasonal").json()
+    assert all(not m["is_best"] for m in data["months"])
+
+
+def test_seasonal_trend_up_when_current_leads(client, db):
+    # Insert high XP for current month
+    from datetime import date
+    d = date.today()
+    this_ts = f"{d.year:04d}-{d.month:02d}-15T12:00:00"
+    _add_chunk(db, 300, 600, this_ts)
+    # Insert low XP for last month
+    from datetime import timedelta
+    last = d.replace(day=1) - timedelta(days=1)
+    last_ts = f"{last.year:04d}-{last.month:02d}-15T12:00:00"
+    _add_chunk(db, 50, 600, last_ts)
+    db.commit()
+    assert client.get("/leaderboard/seasonal").json()["trend"] == "up"
+
+
+def test_seasonal_personal_best_matches_max(client, db):
+    _add_chunk_this_month(db, 500)
+    db.commit()
+    data = client.get("/leaderboard/seasonal").json()
+    assert data["personal_best_xp"] == 500

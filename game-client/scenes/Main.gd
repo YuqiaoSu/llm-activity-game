@@ -93,6 +93,9 @@ func _ready() -> void:
 	$VBox/Buttons/TradeButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Trade.tscn")
 	)
+	$VBox/Buttons/SeasonButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/SeasonalLeaderboard.tscn")
+	)
 	GameAPI.active_events_updated.connect(_on_active_events)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()

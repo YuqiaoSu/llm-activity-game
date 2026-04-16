@@ -36,6 +36,7 @@ signal donation_completed(ok: bool, data: Dictionary)
 signal heatmap_updated(entries: Array)
 signal trade_offers_updated(offers: Array)
 signal trade_accepted(ok: bool, data: Dictionary)
+signal seasonal_leaderboard_updated(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -300,6 +301,12 @@ func fetch_active_events() -> void:
 			active_events_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /events/active response is not an Array")
+	)
+
+
+func fetch_seasonal_leaderboard(months: int = 6) -> void:
+	_http_get("/leaderboard/seasonal?months=%d" % months, func(data: Dictionary) -> void:
+		seasonal_leaderboard_updated.emit(data)
 	)
 
 
