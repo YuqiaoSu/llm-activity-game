@@ -111,6 +111,19 @@ class SyncAgent:
                 multiplier *= float(effect.params.get("factor", 1.0))
         return multiplier
 
+    @staticmethod
+    def _category_xp_bonus(effects: list, category: str) -> float:
+        """Multiply all category_xp_bonus effects that match the given category.
+
+        Returns 1.0 if no matching effects exist (i.e. no bonus).
+        """
+        multiplier = 1.0
+        for effect in effects:
+            if effect.effect_type == "category_xp_bonus":
+                if effect.params.get("category", "").upper() == category.upper():
+                    multiplier *= float(effect.params.get("factor", 1.0))
+        return multiplier
+
     def _check_place_unlocks(self, player_level: int) -> None:
         """Unlock any LOCKED places whose condition is now met and notify the player."""
         places = list_places(self.db)
@@ -169,7 +182,8 @@ class SyncAgent:
             except ValueError:
                 continue  # unknown label — skip XP and drops
 
-            xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier))
+            cat_bonus = self._category_xp_bonus(active_effects, cat.value)
+            xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier * cat_bonus))
             xp_earned_this_poll[cat.value] = xp_earned_this_poll.get(cat.value, 0) + xp
             award_category_xp(
                 self.db,

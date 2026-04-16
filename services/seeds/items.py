@@ -105,4 +105,32 @@ SEED_ITEMS: list[ItemDefinition] = [
         icon="fortune_chip.png",
         description="Place this in a slot to double the weight of RARE item drops.",
     ),
+    # ── category-specific XP bonus items ──────────────────────────────────────
+    ItemDefinition(
+        item_id="work_totem_rare", name="Work Totem",
+        category=Category.WORK, rarity=Rarity.RARE,
+        drop_requirement=DropRequirement(activity_label="WORK", min_duration_sec=3600),
+        effects=[Effect(effect_type="category_xp_bonus", target="slot",
+                        params={"category": "WORK", "factor": 1.3})],
+        icon="work_totem.png",
+        description="Place this in a slot to earn 30% more XP from WORK activity.",
+    ),
+    ItemDefinition(
+        item_id="game_totem_rare", name="Game Totem",
+        category=Category.GAME, rarity=Rarity.RARE,
+        drop_requirement=DropRequirement(activity_label="GAME", min_duration_sec=3600),
+        effects=[Effect(effect_type="category_xp_bonus", target="slot",
+                        params={"category": "GAME", "factor": 1.3})],
+        icon="game_totem.png",
+        description="Place this in a slot to earn 30% more XP from GAME activity.",
+    ),
+    ItemDefinition(
+        item_id="explore_totem_epic", name="Explorer's Totem",
+        category=Category.EXPLORE, rarity=Rarity.EPIC,
+        drop_requirement=DropRequirement(activity_label="EXPLORE", min_duration_sec=3600),
+        effects=[Effect(effect_type="category_xp_bonus", target="slot",
+                        params={"category": "EXPLORE", "factor": 1.5})],
+        icon="explore_totem.png",
+        description="Place this in a slot to earn 50% more XP from EXPLORE activity.",
+    ),
 ]
