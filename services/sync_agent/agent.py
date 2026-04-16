@@ -19,6 +19,7 @@ from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
 from services.progression.weekly_challenges import update_weekly_progress
 from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress
+from services.notifications.desktop import notify_level_up
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -212,6 +213,7 @@ class SyncAgent:
             if new_level > current_level:
                 for lvl in range(current_level + 1, new_level + 1):
                     insert_level_up_notification(self.db, self.character_id, lvl)
+                    notify_level_up(lvl)
                 self.db.commit()
                 self._check_place_unlocks(new_level)
                 current_level = new_level
