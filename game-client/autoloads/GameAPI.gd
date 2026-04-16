@@ -24,6 +24,7 @@ signal collection_updated(entries: Array)
 signal suggestions_updated(entries: Array)
 signal fuse_completed(ok: bool, data: Dictionary)
 signal daily_goals_updated(entries: Array)
+signal recap_updated(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -119,6 +120,15 @@ func fetch_collection() -> void:
 			collection_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /collection response is not an Array")
+	)
+
+
+func fetch_weekly_recap(weeks_ago: int = 0) -> void:
+	_http_get("/recap/weekly?weeks_ago=%d" % weeks_ago, func(data) -> void:
+		if data is Dictionary:
+			recap_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /recap/weekly response is not a Dictionary")
 	)
 
 

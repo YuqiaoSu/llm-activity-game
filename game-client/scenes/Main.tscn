@@ -85,6 +85,9 @@ text = "Suggestions →"
 [node name="GoalsButton" type="Button" parent="VBox/Buttons"]
 text = "Goals →"
 
+[node name="RecapButton" type="Button" parent="VBox/Buttons"]
+text = "Recap →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

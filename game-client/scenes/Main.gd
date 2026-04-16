@@ -58,6 +58,9 @@ func _ready() -> void:
 	$VBox/Buttons/GoalsButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Goals.tscn")
 	)
+	$VBox/Buttons/RecapButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Recap.tscn")
+	)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 
