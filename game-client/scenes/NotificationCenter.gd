@@ -9,6 +9,7 @@ const _EVENT_LABELS := {
 	"item_drop":          "Item Drop",
 	"level_up":           "Level Up",
 	"place_unlock":       "Place Unlock",
+	"place_level_up":     "Place Level Up",
 	"achievement_unlock": "Achievement",
 	"challenge_complete": "Challenge",
 }
@@ -17,12 +18,13 @@ const _EVENT_COLORS := {
 	"item_drop":          Color(0.70, 0.90, 1.00),
 	"level_up":           Color(1.00, 0.85, 0.10),
 	"place_unlock":       Color(0.20, 0.80, 0.60),
+	"place_level_up":     Color(0.55, 0.85, 1.00),
 	"achievement_unlock": Color(1.00, 0.84, 0.00),
 	"challenge_complete": Color(0.20, 0.80, 1.00),
 }
 
 # Parallel to OptionButton items (index 0 = All)
-const _FILTER_VALUES := ["", "item_drop", "level_up", "place_unlock", "achievement_unlock", "challenge_complete"]
+const _FILTER_VALUES := ["", "item_drop", "level_up", "place_unlock", "place_level_up", "achievement_unlock", "challenge_complete"]
 
 var _entries: Array = []
 
@@ -37,7 +39,7 @@ func _ready() -> void:
 
 	_filter_opts.clear()
 	_filter_opts.add_item("All")
-	for label: String in ["Item Drop", "Level Up", "Place Unlock", "Achievement", "Challenge"]:
+	for label: String in ["Item Drop", "Level Up", "Place Unlock", "Place Level Up", "Achievement", "Challenge"]:
 		_filter_opts.add_item(label)
 
 	_fetch()
@@ -142,6 +144,10 @@ func _entry_summary(entry: Dictionary) -> String:
 			return "Reached level %d" % payload.get("new_level", "?")
 		"place_unlock":
 			return str(payload.get("place_name", "New place"))
+		"place_level_up":
+			var pname: String = payload.get("place_name", "Place")
+			var lvl = payload.get("new_level", "?")
+			return "%s reached level %s" % [pname, str(lvl)]
 		"achievement_unlock":
 			return str(payload.get("name", "Achievement"))
 		"challenge_complete":

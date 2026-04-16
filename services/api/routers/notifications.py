@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Request, HTTPException, Query
+from pydantic import BaseModel
 from services.reward_ledger.ledger import get_pending_notifications
 
 router = APIRouter()
@@ -20,7 +21,7 @@ def get_inbox(
     """Return all notifications newest-first (acknowledged and pending).
 
     Optional `event_type` filter: item_drop, level_up, place_unlock,
-    achievement_unlock, challenge_complete.
+    place_level_up, achievement_unlock, challenge_complete.
     Optional `limit` (default 50, max 200).
     """
     db = request.app.state.db
@@ -62,10 +63,7 @@ def ack_notification(notification_id: str, request: Request) -> dict:
 
 @router.post("/ack-all")
 def ack_all_notifications(request: Request) -> dict:
-    """Mark all pending notifications for the default player as acknowledged.
-
-    Called on first launch to avoid flooding the overlay with historical drops.
-    """
+    """Mark all pending notifications for the default player as acknowledged."""
     db = request.app.state.db
     result = db.execute(
         "UPDATE pending_notifications SET acknowledged=1 "
@@ -73,3 +71,26 @@ def ack_all_notifications(request: Request) -> dict:
     )
     db.commit()
     return {"acknowledged_count": result.rowcount}
+
+
+class AckByTypeBody(BaseModel):
+    event_type: str
+
+
+@router.post("/ack-by-type")
+def ack_by_type(body: AckByTypeBody, request: Request) -> dict:
+    """Bulk-acknowledge all unread notifications of a specific event_type.
+
+    Useful for dismissing an entire category (e.g. all item_drop notifications).
+    Returns 400 if event_type is empty.
+    """
+    if not body.event_type.strip():
+        raise HTTPException(status_code=400, detail="event_type must not be empty")
+    db = request.app.state.db
+    result = db.execute(
+        "UPDATE pending_notifications SET acknowledged=1 "
+        "WHERE character_id='player_default' AND event_type=? AND acknowledged=0",
+        (body.event_type,),
+    )
+    db.commit()
+    return {"acknowledged_count": result.rowcount, "event_type": body.event_type}

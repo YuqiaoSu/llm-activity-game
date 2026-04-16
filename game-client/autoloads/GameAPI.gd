@@ -57,9 +57,16 @@ func fetch_notifications() -> void:
 
 
 func ack_all_notifications() -> void:
-    _http_post("/notifications/ack-all", func(_code: int, _data: Dictionary) -> void:
-        pass
-    )
+	_http_post("/notifications/ack-all", func(_code: int, _data: Dictionary) -> void:
+		pass
+	)
+
+
+func ack_notifications_by_type(event_type: String) -> void:
+	var body := JSON.stringify({"event_type": event_type})
+	_http_post("/notifications/ack-by-type", func(_code: int, _data: Dictionary) -> void:
+		pass
+	, body)
 
 
 func ack_notification(nid: String) -> void:
