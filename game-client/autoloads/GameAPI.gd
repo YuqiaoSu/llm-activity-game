@@ -22,6 +22,7 @@ signal challenge_claimed(ok: bool, challenge_id: String, xp: int)
 signal challenge_rerolled(ok: bool, data: Dictionary)
 signal collection_updated(entries: Array)
 signal suggestions_updated(entries: Array)
+signal fuse_completed(ok: bool, data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -118,6 +119,13 @@ func fetch_collection() -> void:
 		else:
 			push_error("GameAPI: /collection response is not an Array")
 	)
+
+
+func fuse_item(item_id: String) -> void:
+	var body_str := JSON.stringify({"item_id": item_id})
+	_http_post("/inventory/fuse", func(code: int, data: Dictionary) -> void:
+		fuse_completed.emit(code == 200, data)
+	, body_str)
 
 
 func fetch_suggestions() -> void:
@@ -288,7 +296,7 @@ func _http_delete(path: String, on_done: Callable) -> void:
 		http.queue_free()
 
 
-func _http_post(path: String, on_done: Callable) -> void:
+func _http_post(path: String, on_done: Callable, body_str: String = "") -> void:
     var http := HTTPRequest.new()
     add_child(http)
     http.request_completed.connect(
@@ -301,7 +309,7 @@ func _http_post(path: String, on_done: Callable) -> void:
             on_done.call(code, parsed if parsed != null else {})
     )
     var headers := PackedStringArray(["Content-Type: application/json"])
-    var err := http.request(BASE_URL + path, headers, HTTPClient.METHOD_POST, "")
+    var err := http.request(BASE_URL + path, headers, HTTPClient.METHOD_POST, body_str)
     if err != OK:
         push_error("GameAPI: failed to start POST %s" % path)
         http.queue_free()

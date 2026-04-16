@@ -1,11 +1,23 @@
+import json
+import random
+import uuid
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 
 router = APIRouter()
 
+# Ordered rarity tiers — fusion consumes 3× tier N to produce 1× tier N+1
+_RARITY_ORDER = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
+_FUSE_COUNT = 3   # copies required to fuse
+
 
 class EquipRequest(BaseModel):
     equipped: bool
+
+
+class FuseRequest(BaseModel):
+    item_id: str   # the item type to fuse (must have >= 3 unplaced copies)
 
 
 @router.get("")
@@ -92,3 +104,104 @@ def equip_item(item_id: str, body: EquipRequest, request: Request) -> dict:
     )
     db.commit()
     return {"item_id": item_id, "equipped": body.equipped, "quantity": row["cnt"]}
+
+
+@router.post("/fuse")
+def fuse_items(body: FuseRequest, request: Request) -> dict:
+    """Fuse 3 copies of the same item into 1 copy of the next rarity tier.
+
+    Rules:
+    - Consumes exactly 3 unplaced (placed_in IS NULL) instances of `item_id`.
+    - Equipped instances are included only if no unplaced-unequipped copies exist
+      first (prefers spending unequipped copies to minimise disruption).
+    - The resulting item is drawn randomly from `item_definitions` at the next
+      rarity tier (same or different item_id — it's a fusion reward, not a copy).
+    - LEGENDARY items cannot be fused (400).
+    - Returns the new item dict plus the consumed instance IDs.
+    """
+    db = request.app.state.db
+
+    # Resolve current rarity of the item
+    def_row = db.execute(
+        "SELECT json_extract(data, '$.rarity') AS rarity FROM item_definitions WHERE item_id=?",
+        (body.item_id,),
+    ).fetchone()
+    if def_row is None:
+        raise HTTPException(status_code=404, detail="Item definition not found")
+
+    current_rarity: str = def_row["rarity"]
+    if current_rarity not in _RARITY_ORDER:
+        raise HTTPException(status_code=400, detail=f"Unknown rarity: {current_rarity}")
+    rarity_idx = _RARITY_ORDER.index(current_rarity)
+    if rarity_idx >= len(_RARITY_ORDER) - 1:
+        raise HTTPException(status_code=400, detail="LEGENDARY items cannot be fused")
+    next_rarity = _RARITY_ORDER[rarity_idx + 1]
+
+    # Find unplaced instances — prefer unequipped first
+    candidates = db.execute(
+        """
+        SELECT instance_id, equipped
+        FROM inventory
+        WHERE character_id='player_default' AND item_id=? AND placed_in IS NULL
+        ORDER BY equipped ASC   -- 0 (unequipped) first
+        LIMIT ?
+        """,
+        (body.item_id, _FUSE_COUNT),
+    ).fetchall()
+
+    if len(candidates) < _FUSE_COUNT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need {_FUSE_COUNT} unplaced copies of {body.item_id}; "
+                   f"found {len(candidates)}",
+        )
+
+    consumed_ids = [r["instance_id"] for r in candidates]
+
+    # Pick a random item at next_rarity
+    targets = db.execute(
+        "SELECT item_id FROM item_definitions "
+        "WHERE json_extract(data, '$.rarity') = ?",
+        (next_rarity,),
+    ).fetchall()
+    if not targets:
+        raise HTTPException(
+            status_code=500,
+            detail=f"No item definitions found for rarity {next_rarity}",
+        )
+    new_item_id: str = random.choice(targets)["item_id"]
+
+    # Delete consumed instances
+    for iid in consumed_ids:
+        db.execute("DELETE FROM inventory WHERE instance_id=?", (iid,))
+
+    # Insert new instance
+    new_instance_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        "INSERT INTO inventory (instance_id, character_id, item_id, acquired_at, source_chunk) "
+        "VALUES (?, 'player_default', ?, ?, 'fusion')",
+        (new_instance_id, new_item_id, now),
+    )
+
+    # Stamp collection log (INSERT OR IGNORE — first discovery only)
+    db.execute(
+        "INSERT OR IGNORE INTO collection_log (player_id, item_id, first_seen_at) VALUES (?, ?, ?)",
+        ("player_default", new_item_id, now),
+    )
+
+    db.commit()
+
+    # Return new item details
+    new_def = db.execute(
+        "SELECT data FROM item_definitions WHERE item_id=?", (new_item_id,)
+    ).fetchone()
+    new_item_data = json.loads(new_def["data"]) if new_def else {}
+    return {
+        "new_instance_id": new_instance_id,
+        "new_item_id": new_item_id,
+        "new_rarity": next_rarity,
+        "new_item": new_item_data,
+        "consumed_instance_ids": consumed_ids,
+        "fused_from_rarity": current_rarity,
+    }

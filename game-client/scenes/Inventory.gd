@@ -14,6 +14,7 @@ func _ready() -> void:
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
 	GameAPI.item_discarded.connect(_on_item_discarded)
+	GameAPI.fuse_completed.connect(_on_fuse_completed)
 	GameAPI.fetch_inventory()
 
 
@@ -24,6 +25,8 @@ func _exit_tree() -> void:
 		GameAPI.equip_updated.disconnect(_on_equip_updated)
 	if GameAPI.item_discarded.is_connected(_on_item_discarded):
 		GameAPI.item_discarded.disconnect(_on_item_discarded)
+	if GameAPI.fuse_completed.is_connected(_on_fuse_completed):
+		GameAPI.fuse_completed.disconnect(_on_fuse_completed)
 
 
 func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
@@ -31,6 +34,10 @@ func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
 
 
 func _on_item_discarded(_instance_id: String) -> void:
+	GameAPI.fetch_inventory()
+
+
+func _on_fuse_completed(_ok: bool, _data: Dictionary) -> void:
 	GameAPI.fetch_inventory()
 
 
@@ -91,6 +98,18 @@ func _make_card(item: Dictionary) -> Control:
 			GameAPI.discard_item(iid)
 		)
 		hbox.add_child(discard_btn)
+
+	# Fuse button — 3× same rarity → 1× next rarity (not available for LEGENDARY)
+	var rarity: String = item.get("rarity", "")
+	if qty >= 3 and rarity != "LEGENDARY" and rarity != "":
+		var fuse_btn := Button.new()
+		fuse_btn.text = "Fuse 3×"
+		fuse_btn.modulate = Color(0.6, 0.85, 1.0)   # light blue
+		var fuse_item_id: String = item_id
+		fuse_btn.pressed.connect(func() -> void:
+			GameAPI.fuse_item(fuse_item_id)
+		)
+		hbox.add_child(fuse_btn)
 
 	vbox.add_child(hbox)
 
