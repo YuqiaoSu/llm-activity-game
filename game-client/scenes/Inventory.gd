@@ -11,7 +11,8 @@ var _craft_slot_a: Dictionary = {}   # item dict for first craft selection
 var _craft_slot_b: Dictionary = {}   # item dict for second craft selection
 var _craft_panel: VBoxContainer      # created dynamically; shown when a slot is filled
 
-var _items_cache: Array = []         # last received inventory array
+var _items_cache: Array  = []        # last received inventory array
+var _places_cache: Array = []        # last received places array (for quick-assign)
 
 # Filter / sort state
 const _RARITY_ORDER := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
@@ -33,6 +34,8 @@ func _ready() -> void:
 	GameAPI.item_discarded.connect(_on_item_discarded)
 	GameAPI.fuse_completed.connect(_on_fuse_completed)
 	GameAPI.craft_completed.connect(_on_craft_completed)
+	GameAPI.places_updated.connect(_on_places)
+	GameAPI.slot_assigned.connect(_on_slot_assigned)
 
 	# Build filter/sort row and insert it between the header and scroll area
 	_filter_row = _make_filter_row()
@@ -42,6 +45,7 @@ func _ready() -> void:
 	vbox.move_child(_filter_row, 1)
 
 	GameAPI.fetch_inventory()
+	GameAPI.fetch_places()  # needed for quick-assign slot picker
 
 
 func _exit_tree() -> void:
@@ -55,6 +59,10 @@ func _exit_tree() -> void:
 		GameAPI.fuse_completed.disconnect(_on_fuse_completed)
 	if GameAPI.craft_completed.is_connected(_on_craft_completed):
 		GameAPI.craft_completed.disconnect(_on_craft_completed)
+	if GameAPI.places_updated.is_connected(_on_places):
+		GameAPI.places_updated.disconnect(_on_places)
+	if GameAPI.slot_assigned.is_connected(_on_slot_assigned):
+		GameAPI.slot_assigned.disconnect(_on_slot_assigned)
 
 
 func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
@@ -78,10 +86,56 @@ func _on_craft_completed(ok: bool, _data: Dictionary) -> void:
 		_rebuild_list(_items_cache)
 
 
+func _on_places(places: Array) -> void:
+	_places_cache = places
+	_rebuild_list(_items_cache)  # slot pickers may need updating
+
+
+func _on_slot_assigned(_place: Dictionary) -> void:
+	# Refresh both to reflect occupant changes
+	GameAPI.fetch_inventory()
+	GameAPI.fetch_places()
+
+
 func _on_inventory(items: Array) -> void:
 	_items_cache = items
 	_count_label.text = "Inventory (%d)" % items.size()
 	_rebuild_list(items)
+
+
+func _available_slots_for(item_category: String) -> Array:
+	"""Return list of {label, place_id, slot_id} for unlocked slots that accept this category."""
+	var result: Array = []
+	var cat_upper: String = item_category.to_upper()
+	for raw_place in _places_cache:
+		if not raw_place is Dictionary:
+			continue
+		var place := raw_place as Dictionary
+		# Only UNLOCKED places
+		if place.get("state", "") != "UNLOCKED":
+			continue
+		var pname: String = place.get("name", place.get("place_id", "?"))
+		var pid: String   = place.get("place_id", "")
+		for raw_slot in place.get("slots", []):
+			if not raw_slot is Dictionary:
+				continue
+			var slot := raw_slot as Dictionary
+			# Skip occupied slots
+			if slot.get("occupant_id") != null:
+				continue
+			var sid: String = slot.get("slot_id", "")
+			# Check category filter
+			var accepts = slot.get("accepts")
+			var accepted: bool = true
+			if accepts is Array and accepts.size() > 0:
+				accepted = false
+				for a in accepts:
+					if str(a).to_upper() == cat_upper:
+						accepted = true
+						break
+			if accepted:
+				result.append({"label": "%s · %s" % [pname, sid], "place_id": pid, "slot_id": sid})
+	return result
 
 
 func _make_filter_row() -> HBoxContainer:
@@ -361,6 +415,37 @@ func _make_card(item: Dictionary) -> Control:
 	hbox.add_child(craft_sel_btn)
 
 	vbox.add_child(hbox)
+
+	# "Place in…" quick-assign — inline slot list toggled by button in hbox
+	# Built after hbox is added so the popup appears below the main row
+	if avail_iid != null:
+		var iid_str: String = str(avail_iid)
+		var cat: String = item.get("category", "")
+		var slots := _available_slots_for(cat)
+		if slots.size() > 0:
+			var place_popup_vbox := VBoxContainer.new()
+			place_popup_vbox.visible = false
+			for slot_info in slots:
+				var slot_btn := Button.new()
+				slot_btn.text = slot_info["label"]
+				slot_btn.flat  = true
+				slot_btn.add_theme_font_size_override("font_size", 10)
+				var pid: String = slot_info["place_id"]
+				var sid: String = slot_info["slot_id"]
+				slot_btn.pressed.connect(func() -> void:
+					GameAPI.assign_slot(pid, sid, iid_str)
+					place_popup_vbox.visible = false
+				)
+				place_popup_vbox.add_child(slot_btn)
+			vbox.add_child(place_popup_vbox)
+
+			var place_btn := Button.new()
+			place_btn.text = "Place in…"
+			place_btn.modulate = Color(0.75, 0.6, 1.0)   # lilac
+			place_btn.pressed.connect(func() -> void:
+				place_popup_vbox.visible = not place_popup_vbox.visible
+			)
+			hbox.add_child(place_btn)
 
 	# ── effect summary row (only when slot effects present) ───────────────────
 	var effects: Array = item.get("effects", [])
