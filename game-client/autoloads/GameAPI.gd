@@ -16,6 +16,7 @@ signal stats_updated(data: Dictionary)
 signal history_updated(entries: Array)
 signal achievements_updated(entries: Array)
 signal challenges_updated(entries: Array)
+signal daily_stats_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -81,6 +82,15 @@ func fetch_achievements() -> void:
 			achievements_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /achievements response is not an Array")
+	)
+
+
+func fetch_daily_stats(days: int = 7) -> void:
+	_http_get("/stats/daily?days=%d" % days, func(data) -> void:
+		if data is Array:
+			daily_stats_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /stats/daily response is not an Array")
 	)
 
 
