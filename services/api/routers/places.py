@@ -1,8 +1,14 @@
 import json
+import uuid
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
+
+_MIN_PLACE_LEVEL_FOR_DONATION = 5
+_DEFAULT_BOOST_FACTOR = 0.10   # 10% additive XP multiplier per donated item
 
 
 def _accepts_list(slot: dict) -> list[str]:
@@ -154,3 +160,87 @@ def assign_slot(place_id: str, slot_id: str, body: SlotAssignBody, request: Requ
     place = get_place(db, place_id)
     rebuild_active_effects(db, place)
     return get_place(db, place_id).model_dump()
+
+
+class DonateBody(BaseModel):
+    instance_id: str
+
+
+@router.post("/{place_id}/donate")
+def donate_item(place_id: str, body: DonateBody, request: Request) -> dict:
+    """Donate an item to a place, permanently granting a +10% XP perk.
+
+    Requirements:
+    - Place must be UNLOCKED and at level >= 5.
+    - The item instance must exist in the player's inventory and must not be
+      placed in a slot (placed_in IS NULL).
+    - The same item type (item_id) cannot be donated to the same place twice.
+
+    The item instance is consumed. The perk persists across slot changes.
+    """
+    db = request.app.state.db
+
+    # Validate place
+    place_row = db.execute(
+        "SELECT state, level FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    if place_row["state"] != "UNLOCKED":
+        raise HTTPException(status_code=400, detail="Place is not unlocked")
+    if int(place_row["level"]) < _MIN_PLACE_LEVEL_FOR_DONATION:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Place must be at least level {_MIN_PLACE_LEVEL_FOR_DONATION} to accept donations "
+                   f"(currently level {place_row['level']})",
+        )
+
+    # Validate item instance
+    inv_row = db.execute(
+        "SELECT item_id, placed_in FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (body.instance_id,),
+    ).fetchone()
+    if inv_row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found in inventory")
+    if inv_row["placed_in"] is not None:
+        raise HTTPException(status_code=400, detail="Item is currently placed in a slot; unplace it first")
+
+    item_id: str = inv_row["item_id"]
+
+    # Prevent donating the same item type twice to the same place
+    existing = db.execute(
+        "SELECT 1 FROM place_perks WHERE place_id=? AND item_id=?",
+        (place_id, item_id),
+    ).fetchone()
+    if existing:
+        raise HTTPException(status_code=409, detail="This item type has already been donated to this place")
+
+    # Consume the item
+    db.execute("DELETE FROM inventory WHERE instance_id=?", (body.instance_id,))
+
+    # Write perk
+    now = datetime.now(timezone.utc).isoformat()
+    perk_id = str(uuid.uuid4())
+    db.execute(
+        "INSERT INTO place_perks (perk_id, place_id, item_id, instance_id, boost_factor, donated_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (perk_id, place_id, item_id, body.instance_id, _DEFAULT_BOOST_FACTOR, now),
+    )
+    db.commit()
+
+    item_row = db.execute(
+        "SELECT json_extract(data, '$.name') AS name, "
+        "       json_extract(data, '$.rarity') AS rarity "
+        "FROM item_definitions WHERE item_id=?",
+        (item_id,),
+    ).fetchone()
+
+    return {
+        "perk_id": perk_id,
+        "place_id": place_id,
+        "item_id": item_id,
+        "item_name": item_row["name"] if item_row else item_id,
+        "item_rarity": item_row["rarity"] if item_row else None,
+        "boost_factor": _DEFAULT_BOOST_FACTOR,
+        "donated_at": now,
+    }

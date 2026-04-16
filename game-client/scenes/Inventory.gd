@@ -36,6 +36,7 @@ func _ready() -> void:
 	GameAPI.craft_completed.connect(_on_craft_completed)
 	GameAPI.places_updated.connect(_on_places)
 	GameAPI.slot_assigned.connect(_on_slot_assigned)
+	GameAPI.donation_completed.connect(_on_donation_completed)
 
 	# Build filter/sort row and insert it between the header and scroll area
 	_filter_row = _make_filter_row()
@@ -63,6 +64,8 @@ func _exit_tree() -> void:
 		GameAPI.places_updated.disconnect(_on_places)
 	if GameAPI.slot_assigned.is_connected(_on_slot_assigned):
 		GameAPI.slot_assigned.disconnect(_on_slot_assigned)
+	if GameAPI.donation_completed.is_connected(_on_donation_completed):
+		GameAPI.donation_completed.disconnect(_on_donation_completed)
 
 
 func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
@@ -93,6 +96,11 @@ func _on_places(places: Array) -> void:
 
 func _on_slot_assigned(_place: Dictionary) -> void:
 	# Refresh both to reflect occupant changes
+	GameAPI.fetch_inventory()
+	GameAPI.fetch_places()
+
+
+func _on_donation_completed(_ok: bool, _data: Dictionary) -> void:
 	GameAPI.fetch_inventory()
 	GameAPI.fetch_places()
 
@@ -135,6 +143,23 @@ func _available_slots_for(item_category: String) -> Array:
 						break
 			if accepted:
 				result.append({"label": "%s · %s" % [pname, sid], "place_id": pid, "slot_id": sid})
+	return result
+
+
+func _unlocked_lvl5_places() -> Array:
+	"""Return [{place_id, name}] for UNLOCKED places at level >= 5."""
+	var result: Array = []
+	for raw in _places_cache:
+		if not raw is Dictionary:
+			continue
+		var place := raw as Dictionary
+		if place.get("state", "") != "UNLOCKED":
+			continue
+		if int(place.get("level", 0)) >= 5:
+			result.append({
+				"place_id": place.get("place_id", ""),
+				"name":     place.get("name", place.get("place_id", "?")),
+			})
 	return result
 
 
@@ -446,6 +471,34 @@ func _make_card(item: Dictionary) -> Control:
 				place_popup_vbox.visible = not place_popup_vbox.visible
 			)
 			hbox.add_child(place_btn)
+
+	# "Donate" — permanently boost a level-5+ place with this item
+	if avail_iid != null:
+		var donate_places := _unlocked_lvl5_places()
+		if donate_places.size() > 0:
+			var donate_popup := VBoxContainer.new()
+			donate_popup.visible = false
+			var donate_iid: String = str(avail_iid)
+			for dp in donate_places:
+				var dp_btn := Button.new()
+				dp_btn.text = "→ %s" % dp["name"]
+				dp_btn.flat = true
+				dp_btn.add_theme_font_size_override("font_size", 10)
+				var dp_id: String = dp["place_id"]
+				dp_btn.pressed.connect(func() -> void:
+					GameAPI.donate_item_to_place(dp_id, donate_iid)
+					donate_popup.visible = false
+				)
+				donate_popup.add_child(dp_btn)
+			vbox.add_child(donate_popup)
+
+			var donate_btn := Button.new()
+			donate_btn.text = "Donate"
+			donate_btn.modulate = Color(1.0, 0.75, 0.3)   # amber
+			donate_btn.pressed.connect(func() -> void:
+				donate_popup.visible = not donate_popup.visible
+			)
+			hbox.add_child(donate_btn)
 
 	# ── effect summary row (only when slot effects present) ───────────────────
 	var effects: Array = item.get("effects", [])

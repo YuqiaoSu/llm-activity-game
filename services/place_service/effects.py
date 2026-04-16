@@ -62,6 +62,25 @@ def rebuild_active_effects(conn: sqlite3.Connection, place: Place) -> list[Effec
     return active
 
 
+def load_place_perks(conn: sqlite3.Connection) -> list[Effect]:
+    """Return synthetic xp_multiplier Effects for all donated place perks.
+
+    Each perk contributes a factor of (1 + boost_factor) to the overall XP
+    multiplier.  Multiple perks for the same place stack multiplicatively.
+    """
+    rows = conn.execute(
+        "SELECT place_id, boost_factor FROM place_perks"
+    ).fetchall()
+    return [
+        Effect(
+            effect_type="xp_multiplier",
+            target=row["place_id"],
+            params={"factor": 1.0 + float(row["boost_factor"])},
+        )
+        for row in rows
+    ]
+
+
 def compute_set_bonuses(conn: sqlite3.Connection) -> list[Effect]:
     """Return synthetic xp_multiplier Effects for places with a category set bonus.
 

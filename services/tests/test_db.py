@@ -13,7 +13,7 @@ def test_init_db_creates_all_tables():
         "places", "place_slots", "place_active_effects", "chunk_log",
         "streak_state", "achievements", "player_achievements",
         "weekly_challenges", "player_weekly_progress", "weekly_reroll_state",
-        "collection_log", "daily_goals", "challenge_events",
+        "collection_log", "daily_goals", "challenge_events", "place_perks",
     }
     assert expected == tables
     conn.close()

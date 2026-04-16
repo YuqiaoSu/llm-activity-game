@@ -32,6 +32,7 @@ signal leaderboard_updated(data: Dictionary)
 signal daily_chart_updated(entries: Array)
 signal events_updated(entries: Array)
 signal active_events_updated(entries: Array)
+signal donation_completed(ok: bool, data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -281,6 +282,13 @@ func fetch_events() -> void:
 		else:
 			push_error("GameAPI: /events response is not an Array")
 	)
+
+
+func donate_item_to_place(place_id: String, instance_id: String) -> void:
+	var body_str := JSON.stringify({"instance_id": instance_id})
+	_http_post("/places/%s/donate" % place_id, func(code: int, data: Dictionary) -> void:
+		donation_completed.emit(code == 200, data)
+	, body_str)
 
 
 func fetch_active_events() -> void:

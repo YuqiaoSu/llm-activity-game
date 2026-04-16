@@ -186,6 +186,19 @@ CREATE TABLE IF NOT EXISTS daily_goals (
     UNIQUE (player_id, date, category)
 );
 
+-- place_perks: permanent XP boosts donated to a place by sacrificing an item.
+-- A perk survives slot changes (not stored in place_active_effects).
+-- UNIQUE(place_id, item_id) prevents donating the same item type twice.
+CREATE TABLE IF NOT EXISTS place_perks (
+    perk_id       TEXT PRIMARY KEY,
+    place_id      TEXT NOT NULL REFERENCES places(place_id),
+    item_id       TEXT NOT NULL,              -- donated item type
+    instance_id   TEXT NOT NULL,              -- consumed instance_id (history only)
+    boost_factor  REAL NOT NULL DEFAULT 0.10, -- additive factor on top of base effect
+    donated_at    TEXT NOT NULL,
+    UNIQUE(place_id, item_id)
+);
+
 -- challenge_events: limited-window XP multiplier events per category
 -- category may be 'ALL' to apply to every category.
 -- multiplier is applied to base XP when a chunk falls within [starts_at, ends_at].
