@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Request
+from __future__ import annotations
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, Request, Query
 from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage
 from services.progression.streak import get_streak
@@ -52,3 +54,52 @@ def get_stats(request: Request) -> dict:
         "current_streak": streak["current_streak"],
         "longest_streak": streak["longest_streak"],
     }
+
+
+@router.get("/daily")
+def get_daily_stats(
+    request: Request,
+    days: int = Query(default=7, ge=1, le=90),
+) -> list[dict]:
+    """Return per-day XP and duration aggregated from chunk_log.
+
+    Each entry covers one UTC calendar date with total XP, total active
+    minutes, and a per-category XP breakdown.  Returned newest-first,
+    limited to the last `days` days (default 7, max 90).
+    """
+    db = request.app.state.db
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+
+    rows = db.execute(
+        """
+        SELECT
+            date(processed_at)   AS day,
+            category,
+            SUM(xp_awarded)      AS xp,
+            SUM(duration_sec)    AS dur
+        FROM chunk_log
+        WHERE processed_at >= ?
+        GROUP BY day, category
+        ORDER BY day DESC, category
+        """,
+        (cutoff,),
+    ).fetchall()
+
+    # Fold (day, category) rows into one dict per day
+    daily: dict[str, dict] = {}
+    for row in rows:
+        day = row["day"]
+        if day not in daily:
+            daily[day] = {
+                "date": day,
+                "total_xp": 0,
+                "total_duration_sec": 0,
+                "categories": {},
+            }
+        daily[day]["total_xp"] += row["xp"]
+        daily[day]["total_duration_sec"] += row["dur"]
+        daily[day]["categories"][row["category"]] = (
+            daily[day]["categories"].get(row["category"], 0) + row["xp"]
+        )
+
+    return sorted(daily.values(), key=lambda d: d["date"], reverse=True)
