@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, HTTPException
 from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage, compute_level_xp_range
 from services.progression.streak import get_streak
+from services.progression.config import EVOLUTION_STAGES
 
 router = APIRouter()
 
@@ -34,6 +35,11 @@ def get_player_profile(request: Request) -> dict:
     except json.JSONDecodeError as exc:
         raise HTTPException(status_code=500, detail="Corrupted player profile data") from exc
 
+    # Compute next evolution stage level threshold (None when at max stage)
+    next_stage_level: int | None = None
+    if stage + 1 in EVOLUTION_STAGES:
+        next_stage_level = EVOLUTION_STAGES[stage + 1][0]
+
     return {
         "character_id": row["character_id"],
         "name": row["name"],
@@ -42,6 +48,7 @@ def get_player_profile(request: Request) -> dict:
         "level_xp_start": level_xp_start,
         "level_xp_end": level_xp_end,   # null when at max level
         "evolution_stage": stage,
+        "next_evolution_level": next_stage_level,   # null when at max stage
         "streak_days": streak["current_streak"],
         "category_xp": category_xp,
         "visual": visual,

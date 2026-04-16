@@ -84,9 +84,14 @@ func _exit_tree() -> void:
 func _on_profile(data: Dictionary) -> void:
 	var stage := mini(data.get("evolution_stage", 0) as int, _STAGE_COLORS.size() - 1)
 	_companion_rect.color = _STAGE_COLORS[stage]
-	_evolution_label.text = _STAGE_NAMES[stage]
 
 	var level: int = data.get("level", 1)
+	var next_evo = data.get("next_evolution_level", null)
+	if next_evo != null:
+		_evolution_label.text = "%s · evolves at Lv.%d" % [_STAGE_NAMES[stage], next_evo as int]
+	else:
+		_evolution_label.text = "%s (max stage)" % _STAGE_NAMES[stage]
+
 	_level_label.text = "Level %d" % level
 
 	var total_xp: int = data.get("total_xp", 0)
