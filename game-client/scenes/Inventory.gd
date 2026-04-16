@@ -13,6 +13,15 @@ var _craft_panel: VBoxContainer      # created dynamically; shown when a slot is
 
 var _items_cache: Array = []         # last received inventory array
 
+# Filter / sort state
+const _RARITY_ORDER := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
+var _filter_category: String = ""    # "" = all
+var _filter_rarity: String   = ""    # "" = all
+var _sort_mode: String       = "name"  # "name" | "rarity" | "quantity"
+
+# Filter/sort row (created once in _ready)
+var _filter_row: HBoxContainer
+
 
 func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
@@ -23,6 +32,14 @@ func _ready() -> void:
 	GameAPI.item_discarded.connect(_on_item_discarded)
 	GameAPI.fuse_completed.connect(_on_fuse_completed)
 	GameAPI.craft_completed.connect(_on_craft_completed)
+
+	# Build filter/sort row and insert it between the header and scroll area
+	_filter_row = _make_filter_row()
+	var vbox: VBoxContainer = $VBox
+	# Insert after index 0 (Header) and before the Scroll
+	vbox.add_child(_filter_row)
+	vbox.move_child(_filter_row, 1)
+
 	GameAPI.fetch_inventory()
 
 
@@ -66,6 +83,86 @@ func _on_inventory(items: Array) -> void:
 	_rebuild_list(items)
 
 
+func _make_filter_row() -> HBoxContainer:
+	var row := HBoxContainer.new()
+
+	var cat_label := Label.new()
+	cat_label.text = "Category:"
+	cat_label.add_theme_font_size_override("font_size", 11)
+	row.add_child(cat_label)
+
+	var cat_opt := OptionButton.new()
+	cat_opt.add_item("All")
+	for c in ["focus", "rest", "social", "creative", "exercise", "learning"]:
+		cat_opt.add_item(c.capitalize())
+	cat_opt.item_selected.connect(func(idx: int) -> void:
+		_filter_category = "" if idx == 0 else ["focus","rest","social","creative","exercise","learning"][idx - 1]
+		_rebuild_list(_items_cache)
+	)
+	row.add_child(cat_opt)
+
+	var rar_label := Label.new()
+	rar_label.text = "  Rarity:"
+	rar_label.add_theme_font_size_override("font_size", 11)
+	row.add_child(rar_label)
+
+	var rar_opt := OptionButton.new()
+	rar_opt.add_item("All")
+	for r in _RARITY_ORDER:
+		rar_opt.add_item(r.capitalize())
+	rar_opt.item_selected.connect(func(idx: int) -> void:
+		_filter_rarity = "" if idx == 0 else _RARITY_ORDER[idx - 1]
+		_rebuild_list(_items_cache)
+	)
+	row.add_child(rar_opt)
+
+	var sort_label := Label.new()
+	sort_label.text = "  Sort:"
+	sort_label.add_theme_font_size_override("font_size", 11)
+	row.add_child(sort_label)
+
+	var sort_opt := OptionButton.new()
+	for s in ["Name", "Rarity", "Qty"]:
+		sort_opt.add_item(s)
+	sort_opt.item_selected.connect(func(idx: int) -> void:
+		_sort_mode = ["name", "rarity", "quantity"][idx]
+		_rebuild_list(_items_cache)
+	)
+	row.add_child(sort_opt)
+
+	return row
+
+
+func _apply_filter_sort(items: Array) -> Array:
+	var result: Array = []
+	for raw in items:
+		if not raw is Dictionary:
+			continue
+		var item := raw as Dictionary
+		if _filter_category != "" and item.get("category", "") != _filter_category:
+			continue
+		if _filter_rarity != "" and item.get("rarity", "") != _filter_rarity:
+			continue
+		result.append(item)
+
+	match _sort_mode:
+		"name":
+			result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				return a.get("name", a.get("item_id", "")) < b.get("name", b.get("item_id", ""))
+			)
+		"rarity":
+			result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				var ia: int = _RARITY_ORDER.find(a.get("rarity", "COMMON"))
+				var ib: int = _RARITY_ORDER.find(b.get("rarity", "COMMON"))
+				return ia > ib   # LEGENDARY first
+			)
+		"quantity":
+			result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				return a.get("quantity", 1) > b.get("quantity", 1)
+			)
+	return result
+
+
 func _rebuild_list(items: Array) -> void:
 	for child in _item_list.get_children():
 		child.queue_free()
@@ -76,11 +173,9 @@ func _rebuild_list(items: Array) -> void:
 		_craft_panel = _make_craft_panel()
 		_item_list.add_child(_craft_panel)
 
-	for raw in items:
-		if not raw is Dictionary:
-			push_warning("Inventory: skipping non-Dictionary item: %s" % str(raw))
-			continue
-		_item_list.add_child(_make_card(raw as Dictionary))
+	var visible_items := _apply_filter_sort(items)
+	for item in visible_items:
+		_item_list.add_child(_make_card(item))
 
 
 func _make_craft_panel() -> VBoxContainer:
