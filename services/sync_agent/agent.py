@@ -14,7 +14,7 @@ from services.progression.xp import award_category_xp, xp_for_chunk, get_total_x
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
 from services.place_service.service import list_places, check_unlock_condition
-from services.place_service.effects import load_active_effects
+from services.place_service.effects import load_active_effects, compute_set_bonuses
 from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
 from services.progression.weekly_challenges import update_weekly_progress
@@ -101,10 +101,10 @@ class SyncAgent:
 
     @staticmethod
     def _aggregate_xp_multiplier(effects: list) -> float:
-        """Multiply all xp_multiplier effects together. Returns 1.0 if none present."""
+        """Multiply all xp_multiplier and set_bonus effects together. Returns 1.0 if none."""
         multiplier = 1.0
         for effect in effects:
-            if effect.effect_type == "xp_multiplier":
+            if effect.effect_type in ("xp_multiplier", "set_bonus"):
                 multiplier *= float(effect.params.get("factor", 1.0))
         return multiplier
 
@@ -142,7 +142,7 @@ class SyncAgent:
         catalogue = self._load_catalogue()
         luck = self._get_player_luck()
         current_level = compute_level(get_total_xp(self.db, self.character_id))
-        active_effects = load_active_effects(self.db)
+        active_effects = load_active_effects(self.db) + compute_set_bonuses(self.db)
         drop_mods = self._aggregate_drop_mods(active_effects)
         xp_multiplier = self._aggregate_xp_multiplier(active_effects)
         xp_earned_this_poll: dict[str, int] = {}

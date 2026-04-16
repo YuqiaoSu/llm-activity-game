@@ -112,6 +112,15 @@ func _make_card(place: Dictionary) -> Control:
 	hbox.add_child(cats_lbl)
 	vbox.add_child(hbox)
 
+	# ── set bonus badge ──────────────────────────────────────────────────────
+	if place.get("set_bonus_active", false):
+		var bonus_lbl := Label.new()
+		var factor: float = place.get("set_bonus_factor", 1.25)
+		bonus_lbl.text = "  ★ Set Bonus active: %.2f× XP" % factor
+		bonus_lbl.modulate = Color(1.0, 0.85, 0.1)   # gold
+		bonus_lbl.add_theme_font_size_override("font_size", 11)
+		vbox.add_child(bonus_lbl)
+
 	# ── slot rows (only for unlocked places with slots) ─────────────────────
 	var slots: Array = place.get("slots", [])
 	if unlocked and slots.size() > 0:

@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from services.place_service.service import get_place, list_places
-from services.place_service.effects import rebuild_active_effects
+from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
 
 router = APIRouter()
 
@@ -34,10 +34,23 @@ def _enrich_slots(db, place_dict: dict) -> dict:
     return place_dict
 
 
+def _add_set_bonus_flag(db, place_dicts: list[dict]) -> list[dict]:
+    """Annotate each place dict with set_bonus_active and set_bonus_factor."""
+    bonuses = compute_set_bonuses(db)
+    active_place_ids = {e.target for e in bonuses}
+    bonus_factors = {e.target: e.params.get("factor", 1.25) for e in bonuses}
+    for p in place_dicts:
+        pid = p.get("place_id", "")
+        p["set_bonus_active"] = pid in active_place_ids
+        p["set_bonus_factor"] = bonus_factors.get(pid, None)
+    return place_dicts
+
+
 @router.get("")
 def get_places(request: Request) -> list[dict]:
     db = request.app.state.db
-    return [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
+    dicts = [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
+    return _add_set_bonus_flag(db, dicts)
 
 
 @router.get("/{place_id}")
@@ -46,7 +59,8 @@ def get_place_by_id(place_id: str, request: Request) -> dict:
     place = get_place(db, place_id)
     if place is None:
         raise HTTPException(status_code=404, detail="Place not found")
-    return _enrich_slots(db, place.model_dump())
+    result = _enrich_slots(db, place.model_dump())
+    return _add_set_bonus_flag(db, [result])[0]
 
 
 @router.put("/{place_id}/slots/{slot_id}")

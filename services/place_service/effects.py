@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 from services.models.item import Effect
 from services.models.place import Place
 
+_DEFAULT_SET_BONUS_FACTOR = 1.25   # 25 % XP boost when all slots share a category
+
 
 def load_active_effects(conn: sqlite3.Connection) -> list[Effect]:
     """Return all active effects currently applied across all places."""
@@ -58,3 +60,65 @@ def rebuild_active_effects(conn: sqlite3.Connection, place: Place) -> list[Effec
 
     conn.commit()
     return active
+
+
+def compute_set_bonuses(conn: sqlite3.Connection) -> list[Effect]:
+    """Return synthetic xp_multiplier Effects for places with a category set bonus.
+
+    A place triggers a set bonus when:
+    - All of its slots have occupants (no empty slot), AND
+    - All occupying items share the same category.
+
+    The multiplier is taken from the place's metadata key ``set_bonus_factor``
+    (default: _DEFAULT_SET_BONUS_FACTOR).  The returned Effects have
+    effect_type="set_bonus" so the agent can log them distinctly.
+    """
+    bonuses: list[Effect] = []
+
+    place_rows = conn.execute("SELECT place_id, metadata FROM places").fetchall()
+    for place_row in place_rows:
+        place_id: str = place_row["place_id"]
+        meta: dict = json.loads(place_row["metadata"]) if place_row["metadata"] else {}
+        factor: float = float(meta.get("set_bonus_factor", _DEFAULT_SET_BONUS_FACTOR))
+
+        slot_rows = conn.execute(
+            "SELECT occupant_id FROM place_slots WHERE place_id=?", (place_id,)
+        ).fetchall()
+
+        if not slot_rows:
+            continue   # place has no slots — set bonus not applicable
+
+        # Every slot must be filled
+        if any(s["occupant_id"] is None for s in slot_rows):
+            continue
+
+        # Collect the category of each occupying item
+        categories: set[str] = set()
+        skip = False
+        for slot_row in slot_rows:
+            inv = conn.execute(
+                "SELECT item_id FROM inventory WHERE instance_id=?",
+                (slot_row["occupant_id"],),
+            ).fetchone()
+            if not inv:
+                skip = True
+                break
+            item = conn.execute(
+                "SELECT json_extract(data, '$.category') AS cat FROM item_definitions WHERE item_id=?",
+                (inv["item_id"],),
+            ).fetchone()
+            if not item or not item["cat"]:
+                skip = True
+                break
+            categories.add(item["cat"])
+
+        if skip or len(categories) != 1:
+            continue   # mixed categories — no bonus
+
+        bonuses.append(Effect(
+            effect_type="set_bonus",
+            target=place_id,
+            params={"factor": factor, "category": next(iter(categories))},
+        ))
+
+    return bonuses
