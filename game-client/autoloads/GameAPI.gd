@@ -43,6 +43,8 @@ signal recipes_updated(entries: Array)
 signal pinned_achievements_updated(entries: Array)
 signal achievement_pinned(data: Dictionary)
 signal achievement_unpinned(data: Dictionary)
+signal wishlist_updated(entries: Array)
+signal wishlist_toggled(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -358,6 +360,33 @@ func unpin_achievement(achievement_id: String) -> void:
 			achievement_unpinned.emit(data)
 		else:
 			push_error("GameAPI: unpin_achievement %s → %d" % [achievement_id, code])
+	)
+
+
+func fetch_wishlist() -> void:
+	_http_get("/catalogue/wishlist", func(data) -> void:
+		if data is Array:
+			wishlist_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /catalogue/wishlist response is not an Array")
+	)
+
+
+func add_to_wishlist(item_id: String) -> void:
+	_http_post("/catalogue/%s/wishlist" % item_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			wishlist_toggled.emit(data)
+		else:
+			push_error("GameAPI: add_to_wishlist %s → %d" % [item_id, code])
+	)
+
+
+func remove_from_wishlist(item_id: String) -> void:
+	_http_delete("/catalogue/%s/wishlist" % item_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			wishlist_toggled.emit(data)
+		else:
+			push_error("GameAPI: remove_from_wishlist %s → %d" % [item_id, code])
 	)
 
 

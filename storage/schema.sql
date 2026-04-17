@@ -235,6 +235,14 @@ CREATE TABLE IF NOT EXISTS trade_offers (
     to_category    TEXT                  -- optional: restrict output item to this category
 );
 
+-- wishlist: items a player wants to receive as drops
+CREATE TABLE IF NOT EXISTS wishlist (
+    player_id  TEXT NOT NULL DEFAULT 'player_default',
+    item_id    TEXT NOT NULL REFERENCES item_definitions(item_id),
+    added_at   TEXT NOT NULL,
+    PRIMARY KEY (player_id, item_id)
+);
+
 -- place_active_effects: materialised effects from filled slots; rebuilt on slot change
 CREATE TABLE IF NOT EXISTS place_active_effects (
     effect_id       TEXT PRIMARY KEY,

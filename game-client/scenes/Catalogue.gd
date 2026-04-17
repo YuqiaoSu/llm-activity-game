@@ -26,6 +26,7 @@ var _tab_buttons: Dictionary = {}   # category -> Button
 
 func _ready() -> void:
 	GameAPI.catalogue_updated.connect(_on_catalogue_updated)
+	GameAPI.wishlist_toggled.connect(_on_wishlist_toggled)
 	_back_button.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
@@ -37,6 +38,12 @@ func _ready() -> void:
 func _exit_tree() -> void:
 	if GameAPI.catalogue_updated.is_connected(_on_catalogue_updated):
 		GameAPI.catalogue_updated.disconnect(_on_catalogue_updated)
+	if GameAPI.wishlist_toggled.is_connected(_on_wishlist_toggled):
+		GameAPI.wishlist_toggled.disconnect(_on_wishlist_toggled)
+
+
+func _on_wishlist_toggled(_data: Dictionary) -> void:
+	GameAPI.fetch_catalogue()
 
 
 func _build_tabs() -> void:
@@ -136,5 +143,20 @@ func _make_item_row(item: Dictionary) -> Control:
 			desc_lbl.modulate = Color(0.75, 0.75, 0.75)
 			desc_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 			hbox.add_child(desc_lbl)
+
+	# Wishlist toggle (★ / ☆) — always shown so players can wishlist undiscovered items
+	var wishlisted: bool = bool(item.get("wishlisted", false))
+	var item_id: String = item.get("item_id", "")
+	var star_btn := Button.new()
+	star_btn.text = "★" if wishlisted else "☆"
+	star_btn.modulate = Color(1.0, 0.85, 0.1) if wishlisted else Color(0.5, 0.5, 0.5)
+	star_btn.custom_minimum_size.x = 28
+	star_btn.pressed.connect(func() -> void:
+		if wishlisted:
+			GameAPI.remove_from_wishlist(item_id)
+		else:
+			GameAPI.add_to_wishlist(item_id)
+	)
+	hbox.add_child(star_btn)
 
 	return hbox

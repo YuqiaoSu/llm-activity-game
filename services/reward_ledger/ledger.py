@@ -84,12 +84,17 @@ def record_drop(
         (character_id, item.item_id, now),
     )
 
+    on_wishlist = conn.execute(
+        "SELECT 1 FROM wishlist WHERE player_id=? AND item_id=?",
+        (character_id, item.item_id),
+    ).fetchone() is not None
     _insert_notification(conn, character_id, "item_drop", {
         "item_id": item.item_id,
         "instance_id": instance_id,
         "item_name": item.name,
         "rarity": item.rarity.value,
         "category": item.category.value,
+        "wishlisted": on_wishlist,
     })
     conn.commit()
     return True
