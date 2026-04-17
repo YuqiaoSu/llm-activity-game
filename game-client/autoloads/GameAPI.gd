@@ -40,6 +40,9 @@ signal trade_offers_updated(offers: Array)
 signal trade_accepted(ok: bool, data: Dictionary)
 signal seasonal_leaderboard_updated(data: Dictionary)
 signal recipes_updated(entries: Array)
+signal pinned_achievements_updated(entries: Array)
+signal achievement_pinned(data: Dictionary)
+signal achievement_unpinned(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -328,6 +331,33 @@ func fetch_recipes() -> void:
 			recipes_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /inventory/recipes response is not an Array")
+	)
+
+
+func fetch_pinned_achievements() -> void:
+	_http_get("/achievements/pinned", func(data) -> void:
+		if data is Array:
+			pinned_achievements_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /achievements/pinned response is not an Array")
+	)
+
+
+func pin_achievement(achievement_id: String) -> void:
+	_http_post("/achievements/%s/pin" % achievement_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			achievement_pinned.emit(data)
+		else:
+			push_error("GameAPI: pin_achievement %s → %d" % [achievement_id, code])
+	)
+
+
+func unpin_achievement(achievement_id: String) -> void:
+	_http_delete("/achievements/%s/pin" % achievement_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			achievement_unpinned.emit(data)
+		else:
+			push_error("GameAPI: unpin_achievement %s → %d" % [achievement_id, code])
 	)
 
 

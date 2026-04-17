@@ -24,6 +24,14 @@ text = "← Back"
 text = "Achievements"
 size_flags_horizontal = 3
 
+[node name="PinnedSection" type="VBoxContainer" parent="VBox"]
+
+[node name="PinnedLabel" type="Label" parent="VBox/PinnedSection"]
+text = "★ Showcase (pin up to 3)"
+
+[node name="PinnedList" type="HBoxContainer" parent="VBox/PinnedSection"]
+size_flags_horizontal = 3
+
 [node name="Scroll" type="ScrollContainer" parent="VBox"]
 size_flags_vertical = 3
 

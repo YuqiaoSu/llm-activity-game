@@ -131,6 +131,16 @@ CREATE TABLE IF NOT EXISTS player_achievements (
     PRIMARY KEY (player_id, achievement_id)
 );
 
+-- pinned_achievements: up to 3 achievements a player has chosen to showcase
+-- pin_order (1–3) controls display order; UNIQUE per player+achievement pair.
+CREATE TABLE IF NOT EXISTS pinned_achievements (
+    player_id       TEXT NOT NULL DEFAULT 'player_default',
+    achievement_id  TEXT NOT NULL REFERENCES achievements(achievement_id),
+    pin_order       INTEGER NOT NULL DEFAULT 1,
+    pinned_at       TEXT NOT NULL,
+    PRIMARY KEY (player_id, achievement_id)
+);
+
 -- weekly_challenges: rotating weekly goal definitions (seeded at startup)
 CREATE TABLE IF NOT EXISTS weekly_challenges (
     challenge_id  TEXT PRIMARY KEY,
