@@ -32,6 +32,9 @@ from services.progression.decay import (
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
 
+_COMBO_CATEGORY_THRESHOLD = 3
+_COMBO_BONUS_FACTOR = 1.1
+
 
 class PollResult(str, Enum):
     OK = "OK"
@@ -202,6 +205,19 @@ class SyncAgent:
         # Apply recovery bonus multiplier for returning after dormancy
         if had_recovery:
             xp_multiplier *= RECOVERY_MULTIPLIER
+
+        # Combo bonus: 1.1× when ≥ 3 distinct categories active this poll
+        combo_categories: set[str] = set()
+        for raw in chunk_dicts:
+            try:
+                chunk = Chunk.model_validate(raw)
+                if chunk.confidence >= self.min_confidence:
+                    cat = Category(chunk.label)
+                    combo_categories.add(cat.value)
+            except Exception:
+                pass
+        if len(combo_categories) >= _COMBO_CATEGORY_THRESHOLD:
+            xp_multiplier *= _COMBO_BONUS_FACTOR
 
         for raw in chunk_dicts:
             try:
