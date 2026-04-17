@@ -8,9 +8,13 @@ extends Control
 @onready var _level_label: Label           = $VBox/LevelLabel
 @onready var _xp_label: Label             = $VBox/XPLabel
 @onready var _streak_label: Label          = $VBox/StreakLabel
+@onready var _poll_button: Button          = $VBox/PollRow/PollButton
+@onready var _poll_status: Label           = $VBox/PollRow/PollStatus
 @onready var _top_cats_list: VBoxContainer = $VBox/TopCatsList
 @onready var _pinned_list: HBoxContainer   = $VBox/PinnedList
 @onready var _pinned_details: VBoxContainer = $VBox/Scroll/PinnedDetails
+
+var _is_polling: bool = false
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -37,6 +41,8 @@ func _ready() -> void:
 	)
 	GameAPI.profile_updated.connect(_on_profile)
 	GameAPI.pinned_achievements_updated.connect(_on_pinned)
+	GameAPI.poll_completed.connect(_on_poll_result)
+	_poll_button.pressed.connect(_on_poll_pressed)
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 
@@ -46,6 +52,37 @@ func _exit_tree() -> void:
 		GameAPI.profile_updated.disconnect(_on_profile)
 	if GameAPI.pinned_achievements_updated.is_connected(_on_pinned):
 		GameAPI.pinned_achievements_updated.disconnect(_on_pinned)
+	if GameAPI.poll_completed.is_connected(_on_poll_result):
+		GameAPI.poll_completed.disconnect(_on_poll_result)
+
+
+func _on_poll_pressed() -> void:
+	if _is_polling:
+		return
+	_is_polling = true
+	_poll_button.disabled = true
+	_poll_status.text = "Checking…"
+	GameAPI.poll_now()
+
+
+func _on_poll_result(result: String) -> void:
+	_is_polling = false
+	_poll_button.disabled = false
+	match result:
+		"OK":
+			_poll_status.text = "✓ Rewards processed!"
+			_poll_status.modulate = Color(0.3, 0.85, 0.3)
+			GameAPI.fetch_profile()
+			GameAPI.fetch_pinned_achievements()
+		"NO_NEW_CHUNKS":
+			_poll_status.text = "No new activity"
+			_poll_status.modulate = Color(0.6, 0.6, 0.6)
+		"ON_COOLDOWN":
+			_poll_status.text = "On cooldown — try again shortly"
+			_poll_status.modulate = Color(0.8, 0.5, 0.2)
+		_:
+			_poll_status.text = "Sync error"
+			_poll_status.modulate = Color(0.9, 0.3, 0.3)
 
 
 func _on_profile(data: Dictionary) -> void:

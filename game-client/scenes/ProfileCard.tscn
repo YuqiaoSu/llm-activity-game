@@ -57,6 +57,15 @@ text = "0 XP"
 [node name="StreakLabel" type="Label" parent="VBox"]
 text = ""
 
+[node name="PollRow" type="HBoxContainer" parent="VBox"]
+
+[node name="PollButton" type="Button" parent="VBox/PollRow"]
+text = "Check Rewards"
+
+[node name="PollStatus" type="Label" parent="VBox/PollRow"]
+text = ""
+size_flags_horizontal = 3
+
 [node name="SepStats" type="HSeparator" parent="VBox"]
 
 [node name="TopCatsLabel" type="Label" parent="VBox"]
