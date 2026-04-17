@@ -2,6 +2,7 @@
 extends Control
 
 @onready var _week_label: Label       = $VBox/Header/WeekLabel
+@onready var _daily_list: VBoxContainer = $VBox/DailySection/DailyList
 @onready var _list: VBoxContainer     = $VBox/Scroll/List
 
 const _COLOR_GOLD    := Color(1.0, 0.82, 0.1)
@@ -25,12 +26,63 @@ func _ready() -> void:
 			GameAPI.fetch_weekly_recap(_weeks_ago)
 	)
 	GameAPI.recap_updated.connect(_on_recap)
+	GameAPI.daily_recap_updated.connect(_on_daily_recap)
 	GameAPI.fetch_weekly_recap(0)
+	GameAPI.fetch_daily_recap()
 
 
 func _exit_tree() -> void:
 	if GameAPI.recap_updated.is_connected(_on_recap):
 		GameAPI.recap_updated.disconnect(_on_recap)
+	if GameAPI.daily_recap_updated.is_connected(_on_daily_recap):
+		GameAPI.daily_recap_updated.disconnect(_on_daily_recap)
+
+
+func _on_daily_recap(data: Dictionary) -> void:
+	for child in _daily_list.get_children():
+		child.queue_free()
+
+	var total_xp: int = data.get("total_xp_earned", 0) as int
+	var active_min: int = data.get("total_active_min", 0) as int
+	var drops: int = data.get("drops_earned", 0) as int
+	var goals_done: int = data.get("goals_completed", 0) as int
+	var goals_tot: int = data.get("goals_total", 0) as int
+	var streak: int = data.get("streak_days", 0) as int
+	var top_cat = data.get("top_category", null)
+
+	if total_xp == 0 and active_min == 0:
+		var lbl := Label.new()
+		lbl.text = "  No activity yet today"
+		lbl.modulate = _COLOR_DIM
+		_daily_list.add_child(lbl)
+		return
+
+	_add_daily_stat("XP earned",   str(total_xp))
+	_add_daily_stat("Active time", "%d min" % active_min)
+	_add_daily_stat("Drops",       str(drops))
+	if goals_tot > 0:
+		var goals_color := _COLOR_GOOD if goals_done >= goals_tot else Color.WHITE
+		_add_daily_stat("Goals", "%d / %d" % [goals_done, goals_tot], goals_color)
+	if streak > 0:
+		_add_daily_stat("Streak", "%d day%s 🔥" % [streak, "s" if streak != 1 else ""])
+	if top_cat != null:
+		_add_daily_stat("Top cat", str(top_cat).capitalize(), _COLOR_GOLD)
+
+
+func _add_daily_stat(label: String, value: String, color: Color = Color.WHITE) -> void:
+	var hbox := HBoxContainer.new()
+	var lbl := Label.new()
+	lbl.text = "  " + label
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.modulate = _COLOR_DIM
+	lbl.add_theme_font_size_override("font_size", 12)
+	var val := Label.new()
+	val.text = value
+	val.modulate = color
+	val.add_theme_font_size_override("font_size", 12)
+	hbox.add_child(lbl)
+	hbox.add_child(val)
+	_daily_list.add_child(hbox)
 
 
 func _on_recap(data: Dictionary) -> void:

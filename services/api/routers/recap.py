@@ -1,4 +1,4 @@
-"""Weekly recap endpoint — aggregated summary of the player's week."""
+"""Recap endpoints — daily and weekly summaries of the player's activity."""
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
@@ -6,6 +6,95 @@ from fastapi import APIRouter, Request, Query
 from services.progression.xp import compute_level
 
 router = APIRouter()
+
+
+@router.get("/daily")
+def get_daily_recap(request: Request) -> dict:
+    """Return a summary of today's activity (UTC calendar day).
+
+    Returns:
+      date                ISO date (YYYY-MM-DD) of today UTC
+      total_active_min    total minutes of tracked activity today
+      total_xp_earned     XP awarded today (chunk_log)
+      category_breakdown  {category: {xp, active_min}} for each active category
+      top_category        category with most XP today (null if none)
+      drops_earned        distinct items dropped today (reward_ledger)
+      goals_completed     daily goals completed today
+      goals_total         total daily goals for today
+      streak_days         current streak value
+    """
+    db = request.app.state.db
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    day_start = today + "T00:00:00"
+    day_end   = today + "T23:59:59"
+
+    chunk_rows = db.execute(
+        """
+        SELECT category, SUM(xp_awarded) AS xp, SUM(duration_sec) AS dur_sec
+        FROM chunk_log
+        WHERE processed_at >= ? AND processed_at <= ?
+        GROUP BY category
+        """,
+        (day_start, day_end),
+    ).fetchall()
+
+    category_breakdown: dict[str, dict] = {}
+    total_xp = 0
+    total_sec = 0
+    for row in chunk_rows:
+        xp = row["xp"] or 0
+        dur = row["dur_sec"] or 0
+        category_breakdown[row["category"]] = {
+            "xp": xp,
+            "active_min": round(dur / 60),
+        }
+        total_xp += xp
+        total_sec += dur
+
+    top_category: str | None = (
+        max(category_breakdown, key=lambda c: category_breakdown[c]["xp"])
+        if category_breakdown else None
+    )
+
+    drops_row = db.execute(
+        """
+        SELECT COUNT(DISTINCT item_id) AS n
+        FROM reward_ledger
+        WHERE awarded_at >= ? AND awarded_at <= ?
+        """,
+        (day_start, day_end),
+    ).fetchone()
+    drops_earned: int = drops_row["n"] if drops_row else 0
+
+    goals_row = db.execute(
+        """
+        SELECT
+            COUNT(*) AS total,
+            SUM(completed) AS done
+        FROM daily_goals
+        WHERE player_id='player_default' AND date=?
+        """,
+        (today,),
+    ).fetchone()
+    goals_total: int = goals_row["total"] if goals_row else 0
+    goals_completed: int = int(goals_row["done"] or 0) if goals_row else 0
+
+    streak_row = db.execute(
+        "SELECT current_streak FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    streak_days: int = streak_row["current_streak"] if streak_row else 0
+
+    return {
+        "date":               today,
+        "total_active_min":   round(total_sec / 60),
+        "total_xp_earned":    total_xp,
+        "category_breakdown": category_breakdown,
+        "top_category":       top_category,
+        "drops_earned":       drops_earned,
+        "goals_completed":    goals_completed,
+        "goals_total":        goals_total,
+        "streak_days":        streak_days,
+    }
 
 
 @router.get("/weekly")

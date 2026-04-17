@@ -45,6 +45,7 @@ signal achievement_pinned(data: Dictionary)
 signal achievement_unpinned(data: Dictionary)
 signal wishlist_updated(entries: Array)
 signal wishlist_toggled(data: Dictionary)
+signal daily_recap_updated(data: Dictionary)
 
 
 func fetch_profile() -> void:
@@ -378,6 +379,15 @@ func add_to_wishlist(item_id: String) -> void:
 			wishlist_toggled.emit(data)
 		else:
 			push_error("GameAPI: add_to_wishlist %s → %d" % [item_id, code])
+	)
+
+
+func fetch_daily_recap() -> void:
+	_http_get("/recap/daily", func(data) -> void:
+		if data is Dictionary:
+			daily_recap_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /recap/daily response is not a Dictionary")
 	)
 
 

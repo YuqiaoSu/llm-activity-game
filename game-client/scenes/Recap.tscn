@@ -30,6 +30,15 @@ size_flags_horizontal = 3
 [node name="NextWeekBtn" type="Button" parent="VBox/Header"]
 text = "▶"
 
+[node name="DailySection" type="VBoxContainer" parent="VBox"]
+
+[node name="DailyHeader" type="Label" parent="VBox/DailySection"]
+text = "Today"
+
+[node name="DailyList" type="VBoxContainer" parent="VBox/DailySection"]
+
+[node name="DailySep" type="HSeparator" parent="VBox"]
+
 [node name="Scroll" type="ScrollContainer" parent="VBox"]
 size_flags_vertical = 3
 
