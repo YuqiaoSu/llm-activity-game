@@ -141,6 +141,43 @@ def get_daily_goals(
     return result
 
 
+def get_goal_streak_status(
+    conn: sqlite3.Connection,
+    player_id: str = "default",
+) -> dict:
+    """Return the current goal streak and info about the next milestone.
+
+    Returns:
+        goal_streak        — consecutive days all goals were completed
+        next_milestone_at  — streak count at which the next reward fires (7/14/30)
+        days_to_milestone  — how many more days until the next milestone
+        milestones         — list of {days, rarity, reached} for each defined milestone
+    """
+    row = conn.execute(
+        "SELECT goal_streak FROM streak_state WHERE player_id=?", (player_id,)
+    ).fetchone()
+    streak: int = int(row["goal_streak"]) if row else 0
+
+    milestone_defs = [(7, "RARE"), (14, "EPIC"), (30, "LEGENDARY")]
+    milestones_out = [
+        {"days": d, "rarity": r, "reached": streak >= d}
+        for d, r in milestone_defs
+    ]
+
+    next_milestone: int | None = None
+    for days, _ in milestone_defs:
+        if streak < days:
+            next_milestone = days
+            break
+
+    return {
+        "goal_streak":       streak,
+        "next_milestone_at": next_milestone,
+        "days_to_milestone": (next_milestone - streak) if next_milestone else None,
+        "milestones":        milestones_out,
+    }
+
+
 def check_goal_streak_reward(
     conn: sqlite3.Connection,
     character_id: str = "player_default",

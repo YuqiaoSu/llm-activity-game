@@ -26,6 +26,8 @@ signal suggestions_updated(entries: Array)
 signal fuse_completed(ok: bool, data: Dictionary)
 signal craft_completed(ok: bool, data: Dictionary)
 signal daily_goals_updated(entries: Array)
+signal goal_streak_updated(data: Dictionary)
+signal streak_reward_claimed(data: Dictionary)
 signal recap_updated(data: Dictionary)
 signal catalogue_updated(items: Array)
 signal leaderboard_updated(data: Dictionary)
@@ -188,6 +190,21 @@ func fetch_daily_goals() -> void:
 			daily_goals_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /goals/daily response is not an Array")
+	)
+
+
+func fetch_goal_streak() -> void:
+	_http_get("/goals/streak", func(data) -> void:
+		if data is Dictionary:
+			goal_streak_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /goals/streak response is not a Dictionary")
+	)
+
+
+func claim_streak_reward() -> void:
+	_http_post("/goals/claim-streak-reward", func(code: int, data: Dictionary) -> void:
+		streak_reward_claimed.emit(data)
 	)
 
 

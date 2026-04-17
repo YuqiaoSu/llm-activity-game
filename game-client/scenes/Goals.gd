@@ -1,14 +1,20 @@
 # game-client/scenes/Goals.gd
 extends Control
 
-@onready var _count_label: Label        = $VBox/Header/CountLabel
-@onready var _list: VBoxContainer       = $VBox/Scroll/List
+@onready var _count_label:  Label        = $VBox/Header/CountLabel
+@onready var _list:         VBoxContainer = $VBox/Scroll/List
+@onready var _streak_lbl:   Label        = $VBox/StreakLabel
+@onready var _claim_btn:    Button       = $VBox/ClaimButton
+@onready var _claim_status: Label        = $VBox/ClaimStatus
 
-const _COLOR_DONE    := Color(0.3, 0.85, 0.3)
-const _COLOR_PENDING := Color(0.85, 0.85, 0.85)
-const _COLOR_BAR_BG  := Color(0.25, 0.25, 0.25)
-const _COLOR_BAR_FG  := Color(0.3, 0.7, 1.0)
-const _COLOR_BAR_DONE := Color(0.3, 0.85, 0.3)
+const _COLOR_DONE      := Color(0.3, 0.85, 0.3)
+const _COLOR_PENDING   := Color(0.85, 0.85, 0.85)
+const _COLOR_BAR_BG    := Color(0.25, 0.25, 0.25)
+const _COLOR_BAR_FG    := Color(0.3, 0.7, 1.0)
+const _COLOR_BAR_DONE  := Color(0.3, 0.85, 0.3)
+const _COLOR_MILESTONE := Color(1.0, 0.82, 0.2)
+
+const _RARITY_EMOJI := {"RARE": "💙", "EPIC": "💜", "LEGENDARY": "🌟"}
 
 
 func _ready() -> void:
@@ -16,12 +22,66 @@ func _ready() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
 	GameAPI.daily_goals_updated.connect(_on_goals)
+	GameAPI.goal_streak_updated.connect(_on_streak)
+	GameAPI.streak_reward_claimed.connect(_on_claim_result)
+	_claim_btn.pressed.connect(func() -> void:
+		_claim_status.text = "Claiming…"
+		GameAPI.claim_streak_reward()
+	)
+	_claim_btn.visible = false
 	GameAPI.fetch_daily_goals()
+	GameAPI.fetch_goal_streak()
 
 
 func _exit_tree() -> void:
 	if GameAPI.daily_goals_updated.is_connected(_on_goals):
 		GameAPI.daily_goals_updated.disconnect(_on_goals)
+	if GameAPI.goal_streak_updated.is_connected(_on_streak):
+		GameAPI.goal_streak_updated.disconnect(_on_streak)
+	if GameAPI.streak_reward_claimed.is_connected(_on_claim_result):
+		GameAPI.streak_reward_claimed.disconnect(_on_claim_result)
+
+
+func _on_streak(data: Dictionary) -> void:
+	var streak: int = data.get("goal_streak", 0) as int
+	var next = data.get("next_milestone_at", null)
+	var days_to = data.get("days_to_milestone", null)
+	var milestones: Array = data.get("milestones", [])
+
+	if streak == 0:
+		_streak_lbl.text = "Goal streak: none yet"
+		_streak_lbl.modulate = Color(0.6, 0.6, 0.6)
+	else:
+		var streak_txt := "Goal streak: %d day%s" % [streak, "s" if streak != 1 else ""]
+		if next != null:
+			streak_txt += "  ·  %d to next reward" % (days_to as int)
+		else:
+			streak_txt += "  ·  All milestones reached!"
+		_streak_lbl.text = streak_txt
+		_streak_lbl.modulate = _COLOR_MILESTONE if streak >= 7 else _COLOR_PENDING
+
+	# Show reached milestone badges
+	for m in milestones:
+		if not m is Dictionary:
+			continue
+		var md := m as Dictionary
+		if md.get("reached", false):
+			var days: int = md.get("days", 0) as int
+			var rarity: String = str(md.get("rarity", ""))
+			var emoji: String = _RARITY_EMOJI.get(rarity, "★")
+			_streak_lbl.text += "\n  %s %d-day %s milestone reached!" % [emoji, days, rarity.capitalize()]
+
+
+func _on_claim_result(data: Dictionary) -> void:
+	var granted: bool = bool(data.get("reward_granted", false))
+	if granted:
+		_claim_status.text = "✓ Milestone reward granted!"
+		_claim_status.modulate = _COLOR_DONE
+	else:
+		_claim_status.text = "No new reward (already claimed or goals not complete)"
+		_claim_status.modulate = Color(0.6, 0.6, 0.6)
+	GameAPI.fetch_goal_streak()
+	GameAPI.fetch_daily_goals()
 
 
 func _on_goals(entries: Array) -> void:
