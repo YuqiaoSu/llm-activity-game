@@ -1,0 +1,79 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/ProfileCard.gd" id="1"]
+
+[node name="ProfileCard" type="Control"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16
+offset_top = 16
+offset_right = -16
+offset_bottom = -16
+
+[node name="Header" type="HBoxContainer" parent="VBox"]
+
+[node name="BackButton" type="Button" parent="VBox/Header"]
+text = "← Back"
+
+[node name="TitleLabel" type="Label" parent="VBox/Header"]
+text = "Profile"
+size_flags_horizontal = 3
+
+[node name="CompanionArea" type="Control" parent="VBox"]
+custom_minimum_size = Vector2(100, 100)
+
+[node name="CompanionRect" type="ColorRect" parent="VBox/CompanionArea"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.8, 0.8, 0.9, 1)
+
+[node name="StageLabel" type="Label" parent="VBox/CompanionArea"]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -40
+offset_top = -10
+offset_right = 40
+offset_bottom = 10
+text = "Hatchling"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="NameLabel" type="Label" parent="VBox"]
+text = ""
+
+[node name="LevelLabel" type="Label" parent="VBox"]
+text = "Level 1"
+
+[node name="XPLabel" type="Label" parent="VBox"]
+text = "0 XP"
+
+[node name="StreakLabel" type="Label" parent="VBox"]
+text = ""
+
+[node name="SepStats" type="HSeparator" parent="VBox"]
+
+[node name="TopCatsLabel" type="Label" parent="VBox"]
+text = "Top Categories"
+
+[node name="TopCatsList" type="VBoxContainer" parent="VBox"]
+
+[node name="SepPinned" type="HSeparator" parent="VBox"]
+
+[node name="PinnedLabel" type="Label" parent="VBox"]
+text = "★ Showcase"
+
+[node name="PinnedList" type="HBoxContainer" parent="VBox"]
+size_flags_horizontal = 3
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+size_flags_vertical = 3
+
+[node name="PinnedDetails" type="VBoxContainer" parent="VBox/Scroll"]
+size_flags_horizontal = 3
