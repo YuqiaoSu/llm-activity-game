@@ -66,6 +66,7 @@ class SyncAgent:
         self.strategy = strategy or SessionStrategy()
         self.rate_limiter = rate_limiter or RateLimiter(cooldown_sec=60)
         self.min_confidence = min_confidence
+        self._last_combo_active: bool = False
 
     def _get_cursor(self) -> str | None:
         row = self.db.execute(
@@ -216,7 +217,8 @@ class SyncAgent:
                     combo_categories.add(cat.value)
             except Exception:
                 pass
-        if len(combo_categories) >= _COMBO_CATEGORY_THRESHOLD:
+        self._last_combo_active = len(combo_categories) >= _COMBO_CATEGORY_THRESHOLD
+        if self._last_combo_active:
             xp_multiplier *= _COMBO_BONUS_FACTOR
 
         for raw in chunk_dicts:
@@ -371,4 +373,5 @@ class SyncAgent:
             "xp_by_category": xp_by_cat,
             "chunks_processed": chunks,
             "drops_earned": drops_after - drops_before,
+            "combo_active": self._last_combo_active,
         }

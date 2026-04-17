@@ -259,6 +259,7 @@ func _on_poll_summary(summary: Dictionary) -> void:
 		return   # skip regular session summary when returning from dormancy
 
 	# ── Regular session summary ───────────────────────────────────────────────
+	var combo: bool = bool(summary.get("combo_active", false))
 	var lines: PackedStringArray = [
 		"Session Summary",
 		"",
@@ -267,6 +268,8 @@ func _on_poll_summary(summary: Dictionary) -> void:
 			drops, "s" if drops != 1 else "",
 		],
 	]
+	if combo:
+		lines.append("🔥 3-Category Combo!  +10% XP")
 	for cat in by_cat:
 		var xp: int = by_cat.get(cat, 0) as int
 		if xp > 0:
