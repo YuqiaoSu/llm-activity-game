@@ -109,6 +109,9 @@ text = "Trade →"
 [node name="SeasonButton" type="Button" parent="VBox/Buttons"]
 text = "Season →"
 
+[node name="RecipesButton" type="Button" parent="VBox/Buttons"]
+text = "Recipes →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

@@ -210,3 +210,57 @@ def fuse_items(body: FuseRequest, request: Request) -> dict:
         "consumed_instance_ids": consumed_ids,
         "fused_from_rarity": current_rarity,
     }
+
+
+@router.get("/recipes")
+def get_recipes(request: Request) -> list[dict]:
+    """Return crafting recipe templates based on current inventory.
+
+    For each (category, from_rarity) combination the player has unplaced items in,
+    returns a recipe entry with:
+      category        — item category
+      from_rarity     — rarity tier the player would spend
+      to_rarity       — resulting rarity (next tier), or null for LEGENDARY
+      from_qty        — always 2 (craft requires 2 distinct item types)
+      have_item_types — distinct item_ids the player owns (unplaced, correct rarity+category)
+      can_craft       — True if have_item_types >= 2
+      item_ids        — list of available item_ids for this category+rarity (first 2 used for crafting)
+    """
+    db = request.app.state.db
+
+    rows = db.execute(
+        """
+        SELECT json_extract(d.data, '$.category') AS category,
+               json_extract(d.data, '$.rarity')   AS rarity,
+               COUNT(DISTINCT i.item_id)           AS distinct_types,
+               GROUP_CONCAT(DISTINCT i.item_id)    AS item_ids_csv
+        FROM inventory i
+        JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND i.placed_in IS NULL
+        GROUP BY category, rarity
+        ORDER BY category ASC, rarity ASC
+        """
+    ).fetchall()
+
+    result: list[dict] = []
+    for row in rows:
+        cat = row["category"]
+        rarity = row["rarity"]
+        if rarity not in _RARITY_ORDER:
+            continue
+        rarity_idx = _RARITY_ORDER.index(rarity)
+        to_rarity = _RARITY_ORDER[rarity_idx + 1] if rarity_idx < len(_RARITY_ORDER) - 1 else None
+        distinct = int(row["distinct_types"])
+        item_ids = (row["item_ids_csv"] or "").split(",") if row["item_ids_csv"] else []
+        result.append({
+            "category":        cat,
+            "from_rarity":     rarity,
+            "to_rarity":       to_rarity,
+            "from_qty":        2,
+            "have_item_types": distinct,
+            "can_craft":       distinct >= 2,
+            "item_ids":        item_ids,
+        })
+
+    return result

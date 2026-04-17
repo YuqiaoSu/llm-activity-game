@@ -37,6 +37,7 @@ signal heatmap_updated(entries: Array)
 signal trade_offers_updated(offers: Array)
 signal trade_accepted(ok: bool, data: Dictionary)
 signal seasonal_leaderboard_updated(data: Dictionary)
+signal recipes_updated(entries: Array)
 
 
 func fetch_profile() -> void:
@@ -301,6 +302,15 @@ func fetch_active_events() -> void:
 			active_events_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /events/active response is not an Array")
+	)
+
+
+func fetch_recipes() -> void:
+	_http_get("/inventory/recipes", func(data) -> void:
+		if data is Array:
+			recipes_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory/recipes response is not an Array")
 	)
 
 
