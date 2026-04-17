@@ -92,19 +92,29 @@ func _rebuild() -> void:
 func _add_entry(entry: Dictionary) -> void:
 	var hbox := HBoxContainer.new()
 
-	# Coloured dot
+	var etype: String = entry.get("event_type", "item_drop")
+
+	# Parse payload early so we can check wishlisted
+	var payload_str: String = entry.get("payload", "{}")
+	var payload: Dictionary = {}
+	if not payload_str.is_empty():
+		var parsed = JSON.parse_string(payload_str)
+		if parsed is Dictionary:
+			payload = parsed
+	var wishlisted: bool = etype == "item_drop" and bool(payload.get("wishlisted", false))
+
+	# Coloured dot — gold star for wishlisted item drops
 	var dot := ColorRect.new()
 	dot.custom_minimum_size = Vector2(8, 8)
-	var etype: String = entry.get("event_type", "item_drop")
-	dot.color = _EVENT_COLORS.get(etype, Color(0.7, 0.7, 0.7))
+	dot.color = Color(1.0, 0.85, 0.1) if wishlisted else _EVENT_COLORS.get(etype, Color(0.7, 0.7, 0.7))
 	dot.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	# Type badge
 	var badge := Label.new()
-	badge.text = _EVENT_LABELS.get(etype, etype)
+	badge.text = ("★ " if wishlisted else "") + _EVENT_LABELS.get(etype, etype)
 	badge.custom_minimum_size.x = 100
 	badge.add_theme_font_size_override("font_size", 11)
-	badge.modulate = _EVENT_COLORS.get(etype, Color(0.7, 0.7, 0.7))
+	badge.modulate = Color(1.0, 0.85, 0.1) if wishlisted else _EVENT_COLORS.get(etype, Color(0.7, 0.7, 0.7))
 
 	# Summary
 	var summary := Label.new()
@@ -139,7 +149,8 @@ func _entry_summary(entry: Dictionary) -> String:
 		"item_drop":
 			var name: String = payload.get("item_name", payload.get("item_id", "Unknown"))
 			var rarity: String = payload.get("rarity", "")
-			return name + ((" · " + rarity) if not rarity.is_empty() else "")
+			var star: String = "  ★" if bool(payload.get("wishlisted", false)) else ""
+			return name + ((" · " + rarity) if not rarity.is_empty() else "") + star
 		"level_up":
 			return "Reached level %d" % payload.get("new_level", "?")
 		"place_unlock":

@@ -73,11 +73,15 @@ func _display(notif: Dictionary) -> void:
 			_rarity_label.text = "Weekly Goal"
 			_rarity_bar.color = Color(0.20, 0.80, 1.00)  # cyan-blue
 		_:  # item_drop and unknown types
-			_title_label.text = "Item Dropped!"
 			var rarity: String = payload.get("rarity", "COMMON")
 			_item_name.text = payload.get("item_name", payload.get("item_id", "Unknown Item"))
-			_rarity_label.text = rarity
 			_rarity_bar.color = RarityColor.for_rarity(rarity)
+			if bool(payload.get("wishlisted", false)):
+				_title_label.text = "★ Wishlist Drop!"
+				_rarity_label.text = rarity + "  ·  ★ Wishlisted"
+			else:
+				_title_label.text = "Item Dropped!"
+				_rarity_label.text = rarity
 
 	# Reset bar to zero-width so the tween grows it in from the left
 	_rarity_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
