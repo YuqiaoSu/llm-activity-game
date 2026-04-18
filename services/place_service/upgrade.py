@@ -16,6 +16,9 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone
+from services.progression.mood import compute_mood, mood_xp_multiplier
+from services.progression.decay import get_dormancy_info
+from services.progression.streak import get_streak
 
 
 def xp_threshold(level: int) -> int:
@@ -47,6 +50,16 @@ def award_place_xp(
     """
     if xp <= 0:
         return False
+
+    # Scale XP by companion mood
+    dormancy = get_dormancy_info(db)
+    streak_info = get_streak(db)
+    mood = compute_mood(
+        streak_info["current_streak"],
+        dormancy["is_dormant"],
+        dormancy["dormant_days"],
+    )
+    xp = max(1, int(xp * mood_xp_multiplier(mood)))
 
     row = db.execute(
         "SELECT xp, level FROM places WHERE place_id=?",

@@ -222,6 +222,48 @@ def reroll_challenge(request: Request) -> dict:
     }
 
 
+@router.get("/history")
+def get_challenge_history(
+    request: Request,
+    weeks: int = Query(default=8, ge=1, le=52),
+) -> list[dict]:
+    """Return per-week challenge completion summaries for the last N weeks.
+
+    Each entry: {week_start, completed_count, total_count, all_complete}
+    Only weeks where the player attempted at least one challenge are included.
+    Sorted newest-first.
+    """
+    db = request.app.state.db
+    total_challenges = db.execute(
+        "SELECT COUNT(*) AS n FROM weekly_challenges"
+    ).fetchone()["n"]
+
+    rows = db.execute(
+        """
+        SELECT
+            p.week_start,
+            COUNT(DISTINCT p.challenge_id)              AS attempted,
+            SUM(CASE WHEN p.completed = 1 THEN 1 ELSE 0 END) AS completed_count
+        FROM player_weekly_progress p
+        WHERE p.player_id = 'player_default'
+        GROUP BY p.week_start
+        ORDER BY p.week_start DESC
+        LIMIT ?
+        """,
+        (weeks,),
+    ).fetchall()
+
+    return [
+        {
+            "week_start":       row["week_start"],
+            "completed_count":  int(row["completed_count"]),
+            "total_count":      int(total_challenges),
+            "all_complete":     int(row["completed_count"]) >= int(total_challenges) > 0,
+        }
+        for row in rows
+    ]
+
+
 @router.get("/leaderboard")
 def get_challenge_leaderboard(
     request: Request,

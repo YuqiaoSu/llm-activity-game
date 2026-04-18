@@ -18,6 +18,9 @@ func _ready() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
 	_reroll_btn.pressed.connect(_on_reroll)
+	$VBox/Header/HistoryButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/ChallengeHistory.tscn")
+	)
 	GameAPI.challenges_updated.connect(_on_challenges)
 	GameAPI.challenge_claimed.connect(_on_claim_result)
 	GameAPI.challenge_rerolled.connect(_on_reroll_result)

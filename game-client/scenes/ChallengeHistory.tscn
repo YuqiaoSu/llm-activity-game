@@ -1,8 +1,8 @@
 [gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scenes/Challenges.gd" id="1"]
+[ext_resource type="Script" path="res://scenes/ChallengeHistory.gd" id="1"]
 
-[node name="Challenges" type="Control"]
+[node name="ChallengeHistory" type="Control"]
 anchor_right = 1.0
 anchor_bottom = 1.0
 script = ExtResource("1")
@@ -20,18 +20,12 @@ offset_bottom = -16
 [node name="BackButton" type="Button" parent="VBox/Header"]
 text = "← Back"
 
-[node name="CountLabel" type="Label" parent="VBox/Header"]
-text = "Challenges"
+[node name="TitleLabel" type="Label" parent="VBox/Header"]
+text = "Challenge History"
 size_flags_horizontal = 3
-
-[node name="RerollButton" type="Button" parent="VBox/Header"]
-text = "Reroll"
-
-[node name="HistoryButton" type="Button" parent="VBox/Header"]
-text = "History →"
 
 [node name="Scroll" type="ScrollContainer" parent="VBox"]
 size_flags_vertical = 3
 
-[node name="ChallengeList" type="VBoxContainer" parent="VBox/Scroll"]
+[node name="List" type="VBoxContainer" parent="VBox/Scroll"]
 size_flags_horizontal = 3

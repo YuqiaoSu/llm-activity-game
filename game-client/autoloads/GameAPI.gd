@@ -54,6 +54,7 @@ signal drop_odds_updated(entries: Array)
 signal item_sets_updated(entries: Array)
 signal challenge_leaderboard_updated(data: Dictionary)
 signal multipliers_updated(entries: Array)
+signal challenge_history_updated(entries: Array)
 
 var last_challenge_id: String = ""
 
@@ -416,6 +417,15 @@ func fetch_drop_odds(category: String) -> void:
 			drop_odds_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /inventory/drop-odds response is not an Array")
+	)
+
+
+func fetch_challenge_history(weeks: int = 8) -> void:
+	_http_get("/challenges/history?weeks=%d" % weeks, func(data) -> void:
+		if data is Array:
+			challenge_history_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /challenges/history response is not an Array")
 	)
 
 

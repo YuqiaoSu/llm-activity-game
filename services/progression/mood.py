@@ -13,6 +13,21 @@ from __future__ import annotations
 
 _ANXIOUS_THRESHOLD_DAYS = 14
 
+_MOOD_XP_MULTIPLIERS: dict[str, float] = {
+    "happy":   1.1,
+    "neutral": 1.0,
+    "sad":     0.9,
+    "anxious": 0.8,
+}
+
+
+def mood_xp_multiplier(mood: str) -> float:
+    """Return the XP multiplier applied to place XP based on companion mood.
+
+    happy=1.1, neutral=1.0, sad=0.9, anxious=0.8
+    """
+    return _MOOD_XP_MULTIPLIERS.get(mood, 1.0)
+
 
 def compute_mood(streak: int, is_dormant: bool, dormant_days: int) -> str:
     """Return one of: 'happy', 'neutral', 'sad', 'anxious'.
