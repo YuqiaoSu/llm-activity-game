@@ -254,3 +254,19 @@ CREATE TABLE IF NOT EXISTS place_active_effects (
     params          TEXT NOT NULL DEFAULT '{}',
     applied_at      TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS skills (
+    skill_id        TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    xp_cost         INTEGER NOT NULL DEFAULT 100,
+    effect_type     TEXT NOT NULL,
+    effect_params   TEXT NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE IF NOT EXISTS player_skills (
+    player_id       TEXT NOT NULL,
+    skill_id        TEXT NOT NULL REFERENCES skills(skill_id),
+    unlocked_at     TEXT NOT NULL,
+    PRIMARY KEY (player_id, skill_id)
+);

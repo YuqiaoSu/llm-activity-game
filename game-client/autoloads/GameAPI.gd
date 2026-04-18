@@ -61,6 +61,8 @@ signal daily_bonus_updated(data: Dictionary)
 signal focus_streak_updated(data: Dictionary)
 signal xp_projection_updated(data: Dictionary)
 signal place_leaderboard_updated(entries: Array)
+signal skills_updated(entries: Array)
+signal skill_unlocked(data: Dictionary)
 
 var last_challenge_id: String = ""
 
@@ -99,6 +101,26 @@ func fetch_place_leaderboard() -> void:
             place_leaderboard_updated.emit(data as Array)
         else:
             push_error("GameAPI: /places/leaderboard response is not an Array")
+    )
+
+
+func fetch_skills() -> void:
+    _http_get("/skills", func(data) -> void:
+        if data is Array:
+            skills_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /skills response is not an Array")
+    )
+
+
+func unlock_skill(skill_id: String) -> void:
+    _http_post("/skills/%s/unlock" % skill_id, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            skill_unlocked.emit(data)
+            fetch_skills()
+            fetch_profile()
+        else:
+            push_error("GameAPI: unlock_skill %s → %d" % [skill_id, code])
     )
 
 

@@ -121,6 +121,9 @@ text = "Compare →"
 [node name="FeedButton" type="Button" parent="VBox/Buttons"]
 text = "Feed →"
 
+[node name="SkillsButton" type="Button" parent="VBox/Buttons"]
+text = "Skills →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

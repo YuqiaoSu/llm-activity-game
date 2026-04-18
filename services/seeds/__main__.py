@@ -12,6 +12,7 @@ from services.seeds.achievements import SEED_ACHIEVEMENTS
 from services.seeds.weekly_challenges import SEED_WEEKLY_CHALLENGES
 from services.seeds.events import get_seed_events
 from services.seeds.trade import seed_trade_offers
+from services.seeds.skills import SEED_SKILLS
 
 
 def seed(db_path: str = "game.db") -> None:
@@ -79,6 +80,15 @@ def seed(db_path: str = "game.db") -> None:
     # Trade offers
     n_trades = seed_trade_offers(conn)
     print(f"  {n_trades} trade offers seeded.")
+
+    # Skills
+    for sk in SEED_SKILLS:
+        conn.execute(
+            "INSERT OR IGNORE INTO skills (skill_id, name, description, xp_cost, effect_type, effect_params)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            sk,
+        )
+    print(f"  {len(SEED_SKILLS)} skills seeded.")
 
     conn.commit()
     conn.close()

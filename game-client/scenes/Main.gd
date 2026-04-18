@@ -109,6 +109,9 @@ func _ready() -> void:
 	$VBox/Buttons/FeedButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Feed.tscn")
 	)
+	$VBox/Buttons/SkillsButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Skills.tscn")
+	)
 	GameAPI.active_events_updated.connect(_on_active_events)
 	GameAPI.multipliers_updated.connect(_on_multipliers)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)

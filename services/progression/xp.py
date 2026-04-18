@@ -62,3 +62,29 @@ def get_total_xp(conn: sqlite3.Connection, character_id: str) -> int:
         (character_id,),
     ).fetchone()
     return int(row[0])
+
+
+def deduct_total_xp(conn: sqlite3.Connection, character_id: str, amount: int) -> None:
+    """Deduct `amount` XP proportionally across all category rows.
+
+    Deducts from categories in descending XP order until `amount` is consumed.
+    Raises ValueError if the player's total XP is less than `amount`.
+    Caller is responsible for commit.
+    """
+    total = get_total_xp(conn, character_id)
+    if total < amount:
+        raise ValueError(f"Insufficient XP: have {total}, need {amount}")
+    remaining = amount
+    rows = conn.execute(
+        "SELECT category, xp FROM player_category_xp WHERE character_id=? ORDER BY xp DESC",
+        (character_id,),
+    ).fetchall()
+    for row in rows:
+        if remaining <= 0:
+            break
+        deduct = min(row["xp"], remaining)
+        conn.execute(
+            "UPDATE player_category_xp SET xp = xp - ? WHERE character_id=? AND category=?",
+            (deduct, character_id, row["category"]),
+        )
+        remaining -= deduct

@@ -17,6 +17,20 @@ def load_active_effects(conn: sqlite3.Connection) -> list[Effect]:
     return [Effect(effect_type=r["effect_type"], target="", params=json.loads(r["params"])) for r in rows]
 
 
+def load_skill_effects(conn: sqlite3.Connection, character_id: str) -> list[Effect]:
+    """Return effects from all skills unlocked by the player."""
+    rows = conn.execute(
+        """
+        SELECT s.effect_type, s.effect_params
+        FROM player_skills ps
+        JOIN skills s ON s.skill_id = ps.skill_id
+        WHERE ps.player_id = ?
+        """,
+        (character_id,),
+    ).fetchall()
+    return [Effect(effect_type=r["effect_type"], target="", params=json.loads(r["effect_params"])) for r in rows]
+
+
 def rebuild_active_effects(conn: sqlite3.Connection, place: Place) -> list[Effect]:
     """
     Delete all active effects for `place`, then re-derive them from occupied slots.
