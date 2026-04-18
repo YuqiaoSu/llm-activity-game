@@ -57,6 +57,7 @@ signal multipliers_updated(entries: Array)
 signal challenge_history_updated(entries: Array)
 signal titles_updated(entries: Array)
 signal title_equipped(data: Dictionary)
+signal daily_bonus_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 
@@ -437,6 +438,15 @@ func equip_title(title_id: String) -> void:
 			title_equipped.emit(data)
 		else:
 			push_error("GameAPI: equip_title %s → %d" % [title_id, code])
+	)
+
+
+func fetch_daily_bonus() -> void:
+	_http_get("/challenges/daily-bonus", func(data: Dictionary) -> void:
+		if data is Dictionary:
+			daily_bonus_updated.emit(data)
+		else:
+			push_error("GameAPI: /challenges/daily-bonus response is not a Dictionary")
 	)
 
 

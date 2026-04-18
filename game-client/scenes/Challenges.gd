@@ -11,6 +11,9 @@ const _COLOR_LOCKED   := Color(0.45, 0.45, 0.45)  # dim grey
 const _COLOR_CLAIMED  := Color(0.40, 0.80, 0.40)  # green
 
 var _reroll_used: bool = false
+var _daily_bonus_id: String = ""
+
+const _COLOR_BONUS := Color(1.00, 0.84, 0.00)  # gold
 
 
 func _ready() -> void:
@@ -24,7 +27,10 @@ func _ready() -> void:
 	GameAPI.challenges_updated.connect(_on_challenges)
 	GameAPI.challenge_claimed.connect(_on_claim_result)
 	GameAPI.challenge_rerolled.connect(_on_reroll_result)
-	GameAPI.fetch_challenges()
+	GameAPI.daily_bonus_updated.connect(_on_daily_bonus)
+	# Fetch daily bonus first; _on_daily_bonus then triggers fetch_challenges
+	# so challenge rows are always built with the bonus ID already known.
+	GameAPI.fetch_daily_bonus()
 
 
 func _exit_tree() -> void:
@@ -34,6 +40,13 @@ func _exit_tree() -> void:
 		GameAPI.challenge_claimed.disconnect(_on_claim_result)
 	if GameAPI.challenge_rerolled.is_connected(_on_reroll_result):
 		GameAPI.challenge_rerolled.disconnect(_on_reroll_result)
+	if GameAPI.daily_bonus_updated.is_connected(_on_daily_bonus):
+		GameAPI.daily_bonus_updated.disconnect(_on_daily_bonus)
+
+
+func _on_daily_bonus(data: Dictionary) -> void:
+	_daily_bonus_id = data.get("challenge_id", "")
+	GameAPI.fetch_challenges()
 
 
 func _on_challenges(entries: Array) -> void:
@@ -80,8 +93,17 @@ func _make_row(entry: Dictionary) -> Control:
 	var threshold: int     = entry.get("threshold", 1)
 	var metric: String     = entry.get("metric", "xp")
 	var challenge_id: String = entry.get("challenge_id", "")
+	var is_daily: bool     = challenge_id == _daily_bonus_id and _daily_bonus_id != ""
 
 	var vbox := VBoxContainer.new()
+
+	# ── daily bonus badge ─────────────────────────────────────────────────────
+	if is_daily:
+		var bonus_lbl := Label.new()
+		bonus_lbl.text = "⭐ Challenge of the Day  ·  2× XP bonus!"
+		bonus_lbl.modulate = _COLOR_BONUS
+		bonus_lbl.add_theme_font_size_override("font_size", 11)
+		vbox.add_child(bonus_lbl)
 
 	# ── main row ─────────────────────────────────────────────────────────────
 	var hbox := HBoxContainer.new()
@@ -93,12 +115,12 @@ func _make_row(entry: Dictionary) -> Control:
 	elif completed:
 		dot.color = _COLOR_DONE
 	else:
-		dot.color = _COLOR_PROGRESS
+		dot.color = _COLOR_BONUS if is_daily else _COLOR_PROGRESS
 
 	var name_lbl := Label.new()
 	name_lbl.text = ("✓ " if completed else "  ") + entry.get("name", "?")
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.modulate = _COLOR_CLAIMED if reward_given else (_COLOR_DONE if completed else _COLOR_PROGRESS)
+	name_lbl.modulate = _COLOR_CLAIMED if reward_given else (_COLOR_DONE if completed else (_COLOR_BONUS if is_daily else _COLOR_PROGRESS))
 
 	var status_lbl := Label.new()
 	if reward_given:

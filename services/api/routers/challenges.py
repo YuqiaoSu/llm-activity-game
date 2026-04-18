@@ -1,11 +1,12 @@
 from __future__ import annotations
+import hashlib
 import random
 from fastapi import APIRouter, Request, HTTPException, Query
 from services.progression.weekly_challenges import get_week_start
 from services.progression.xp import award_category_xp, get_total_xp, compute_level
 from services.models.enums import Category
 from services.reward_ledger.ledger import insert_level_up_notification
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 router = APIRouter()
 
@@ -26,6 +27,23 @@ _GHOST_NAMES: dict[str, str] = {
 
 # XP bonus awarded when a player claims a completed challenge reward
 _CLAIM_REWARD_XP = 50
+_DAILY_BONUS_MULTIPLIER = 2.0
+
+
+def _get_daily_bonus_challenge_id(db) -> str | None:
+    """Return today's challenge-of-the-day ID using a stable hash of the ISO date.
+
+    Uses MD5 (not Python's hash()) so the result is reproducible across processes
+    and restarts without a fixed random seed.
+    """
+    rows = db.execute(
+        "SELECT challenge_id FROM weekly_challenges ORDER BY challenge_id"
+    ).fetchall()
+    if not rows:
+        return None
+    today_key = date.today().isoformat().encode()
+    index = int(hashlib.md5(today_key).hexdigest(), 16) % len(rows)
+    return rows[index]["challenge_id"]
 
 
 @router.get("")
@@ -78,6 +96,32 @@ def get_challenges(request: Request) -> list[dict]:
     ]
 
 
+@router.get("/daily-bonus")
+def get_daily_bonus(request: Request) -> dict:
+    """Return today's Challenge of the Day with its 2× XP multiplier.
+
+    Selection is deterministic: stable hash of today's ISO date mod total challenges.
+    Returns 404 if no challenges exist in the database.
+    """
+    db = request.app.state.db
+    challenge_id = _get_daily_bonus_challenge_id(db)
+    if challenge_id is None:
+        raise HTTPException(status_code=404, detail="No challenges available")
+
+    row = db.execute(
+        "SELECT * FROM weekly_challenges WHERE challenge_id=?", (challenge_id,)
+    ).fetchone()
+
+    return {
+        "challenge_id": row["challenge_id"],
+        "name":         row["name"],
+        "description":  row["description"],
+        "category":     row["category"],
+        "multiplier":   _DAILY_BONUS_MULTIPLIER,
+        "date":         date.today().isoformat(),
+    }
+
+
 @router.post("/{challenge_id}/claim")
 def claim_challenge(challenge_id: str, request: Request) -> dict:
     """Claim the XP reward for a completed weekly challenge.
@@ -122,8 +166,12 @@ def claim_challenge(challenge_id: str, request: Request) -> dict:
     except ValueError:
         cat = Category.SPECIAL
 
+    is_daily_bonus = challenge_id == _get_daily_bonus_challenge_id(db)
+    multiplier = _DAILY_BONUS_MULTIPLIER if is_daily_bonus else 1.0
+    xp_awarded = int(_CLAIM_REWARD_XP * multiplier)
+
     prev_level = compute_level(get_total_xp(db, "player_default"))
-    award_category_xp(db, "player_default", cat, _CLAIM_REWARD_XP)
+    award_category_xp(db, "player_default", cat, xp_awarded)
     new_level = compute_level(get_total_xp(db, "player_default"))
     if new_level > prev_level:
         for lvl in range(prev_level + 1, new_level + 1):
@@ -140,9 +188,10 @@ def claim_challenge(challenge_id: str, request: Request) -> dict:
     db.commit()
 
     return {
-        "challenge_id": challenge_id,
-        "xp_awarded": _CLAIM_REWARD_XP,
-        "category": cat.value,
+        "challenge_id":  challenge_id,
+        "xp_awarded":    xp_awarded,
+        "category":      cat.value,
+        "daily_bonus":   is_daily_bonus,
     }
 
 
