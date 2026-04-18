@@ -72,6 +72,17 @@ func fetch_profile() -> void:
     )
 
 
+func rename_player(name: String) -> void:
+    var body := JSON.stringify({"name": name})
+    _http_patch("/player/profile", body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            _cached_profile = data
+            profile_updated.emit(data)
+        else:
+            push_error("GameAPI: rename_player → %d" % code)
+    )
+
+
 func fetch_inventory() -> void:
     _http_get("/inventory", func(data) -> void:
         if data is Array:

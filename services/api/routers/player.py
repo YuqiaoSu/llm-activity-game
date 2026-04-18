@@ -1,6 +1,7 @@
 import json
 import sqlite3
 from fastapi import APIRouter, Request, HTTPException
+from pydantic import BaseModel, field_validator
 from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage, compute_level_xp_range
 from services.progression.streak import get_streak
@@ -82,6 +83,33 @@ def _check_earned(db: sqlite3.Connection, criteria: str) -> bool:
             return compute_level(get_total_xp(db, "player_default")) >= 10
         case _:
             return False
+
+
+class _RenameBody(BaseModel):
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) == 0:
+            raise ValueError("name must not be empty")
+        if len(v) > 24:
+            raise ValueError("name must be 24 characters or fewer")
+        return v
+
+
+@router.patch("/profile")
+def patch_player_profile(body: _RenameBody, request: Request) -> dict:
+    """Rename the player's companion. Validates 1-24 chars (trimmed)."""
+    db = request.app.state.db
+    db.execute(
+        "UPDATE player_profile SET name=? WHERE character_id='player_default'",
+        (body.name,),
+    )
+    db.commit()
+    # Return the full updated profile so the client can refresh state in one round-trip.
+    return get_player_profile(request)
 
 
 @router.get("/profile")

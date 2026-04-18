@@ -17,6 +17,8 @@ extends Control
 
 var _is_polling: bool = false
 var _titles_container: VBoxContainer = null
+var _rename_row: HBoxContainer = null
+var _current_name: String = ""
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -47,6 +49,45 @@ func _ready() -> void:
 	GameAPI.daily_stats_updated.connect(_on_daily_stats)
 	GameAPI.titles_updated.connect(_on_titles)
 	_poll_button.pressed.connect(_on_poll_pressed)
+
+	# Build rename row once; insert after NameLabel in VBox
+	_rename_row = HBoxContainer.new()
+	_rename_row.visible = false
+	var name_edit := LineEdit.new()
+	name_edit.name = "NameEdit"
+	name_edit.placeholder_text = "New name…"
+	name_edit.custom_minimum_size.x = 120
+	_rename_row.add_child(name_edit)
+	var save_btn := Button.new()
+	save_btn.text = "Save"
+	save_btn.pressed.connect(func() -> void:
+		var new_name: String = name_edit.text.strip_edges()
+		if new_name.length() >= 1 and new_name.length() <= 24:
+			GameAPI.rename_player(new_name)
+		_rename_row.visible = false
+		_name_label.visible = true
+	)
+	_rename_row.add_child(save_btn)
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.pressed.connect(func() -> void:
+		_rename_row.visible = false
+		_name_label.visible = true
+	)
+	_rename_row.add_child(cancel_btn)
+	$VBox.add_child(_rename_row)
+	$VBox.move_child(_rename_row, _name_label.get_index() + 1)
+
+	_name_label.mouse_filter = Control.MOUSE_FILTER_STOP
+	_name_label.gui_input.connect(func(event: InputEvent) -> void:
+		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+			name_edit.text = ""
+			name_edit.placeholder_text = _current_name
+			_rename_row.visible = true
+			_name_label.visible = false
+			name_edit.grab_focus()
+	)
+
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
@@ -107,7 +148,8 @@ func _on_profile(data: Dictionary) -> void:
 	else:
 		_stage_label.text = "%s %s\n(max stage)" % [emoji, _STAGE_NAMES[stage]]
 
-	_name_label.text = data.get("name", "Player")
+	_current_name = data.get("name", "Player")
+	_name_label.text = _current_name + "  ✏"
 
 	var level: int = data.get("level", 1)
 	_level_label.text = "Level %d" % level
