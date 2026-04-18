@@ -19,6 +19,7 @@ var _is_polling: bool = false
 var _titles_container: VBoxContainer = null
 var _rename_row: HBoxContainer = null
 var _current_name: String = ""
+var _eta_label: Label = null
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -49,6 +50,7 @@ func _ready() -> void:
 	GameAPI.daily_stats_updated.connect(_on_daily_stats)
 	GameAPI.titles_updated.connect(_on_titles)
 	GameAPI.focus_streak_updated.connect(_on_focus_streak)
+	GameAPI.xp_projection_updated.connect(_on_xp_projection)
 	_poll_button.pressed.connect(_on_poll_pressed)
 
 	# Build rename row once; insert after NameLabel in VBox
@@ -79,6 +81,13 @@ func _ready() -> void:
 	$VBox.add_child(_rename_row)
 	$VBox.move_child(_rename_row, _name_label.get_index() + 1)
 
+	# ETA label: created here, positioned right after XPLabel
+	_eta_label = Label.new()
+	_eta_label.add_theme_font_size_override("font_size", 11)
+	_eta_label.modulate = _COLOR_MUTED
+	$VBox.add_child(_eta_label)
+	$VBox.move_child(_eta_label, _xp_label.get_index() + 1)
+
 	_name_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	_name_label.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
@@ -94,6 +103,7 @@ func _ready() -> void:
 	GameAPI.fetch_daily_stats(7)
 	GameAPI.fetch_titles()
 	GameAPI.fetch_focus_streak()
+	GameAPI.fetch_xp_projection()
 
 
 func _exit_tree() -> void:
@@ -109,6 +119,8 @@ func _exit_tree() -> void:
 		GameAPI.titles_updated.disconnect(_on_titles)
 	if GameAPI.focus_streak_updated.is_connected(_on_focus_streak):
 		GameAPI.focus_streak_updated.disconnect(_on_focus_streak)
+	if GameAPI.xp_projection_updated.is_connected(_on_xp_projection):
+		GameAPI.xp_projection_updated.disconnect(_on_xp_projection)
 
 
 func _on_poll_pressed() -> void:
@@ -358,6 +370,24 @@ func _make_sparkline(entries: Array) -> void:
 			var gap := Control.new()
 			gap.custom_minimum_size = Vector2(BAR_GAP, 0)
 			_sparkline_container.add_child(gap)
+
+
+func _on_xp_projection(data: Dictionary) -> void:
+	if _eta_label == null:
+		return
+	if data.get("at_max_level", false):
+		_eta_label.text = "Max level reached!"
+		_eta_label.modulate = _COLOR_GOLD
+		return
+	var eta_days = data.get("eta_days", null)
+	var eta_date = data.get("eta_date", null)
+	if eta_days == null:
+		_eta_label.text = "No recent activity — keep going!"
+		_eta_label.modulate = _COLOR_MUTED
+	else:
+		var lvl_label: String = _level_label.text  # e.g. "Level 3"
+		_eta_label.text = "At this pace: next level in ~%d day(s) (by %s)" % [eta_days as int, str(eta_date).left(10)]
+		_eta_label.modulate = Color(0.70, 0.90, 1.00)
 
 
 func _on_focus_streak(data: Dictionary) -> void:

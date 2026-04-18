@@ -1,5 +1,7 @@
 import json
+import math
 import sqlite3
+from datetime import date, timedelta
 from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel, field_validator
 from services.models.enums import Category
@@ -169,6 +171,53 @@ def get_player_profile(request: Request) -> dict:
         "visual": visual,
         "equipped_items": equipped_items,
         "equipped_title": row["equipped_title"] if "equipped_title" in row.keys() else None,
+    }
+
+
+@router.get("/xp-projection")
+def get_xp_projection(request: Request) -> dict:
+    """Return level-up ETA based on avg daily XP over the last 7 days.
+
+    Returns {at_max_level: true} when the player is at the level cap.
+    Returns eta_days=null / eta_date=null when avg_daily_xp=0 (no recent activity).
+    """
+    db = request.app.state.db
+    total_xp = get_total_xp(db, "player_default")
+    level = compute_level(total_xp)
+    _, level_xp_end = compute_level_xp_range(level)
+
+    if level_xp_end is None:
+        return {"at_max_level": True}
+
+    xp_to_next = max(0, level_xp_end - total_xp)
+
+    since = (date.today() - timedelta(days=7)).isoformat()
+    row = db.execute(
+        "SELECT COALESCE(SUM(xp_awarded), 0) AS total FROM chunk_log"
+        " WHERE date(processed_at) > ?",
+        (since,),
+    ).fetchone()
+    week_xp: int = int(row["total"]) if row else 0
+    avg_daily_xp: float = week_xp / 7.0
+
+    if avg_daily_xp <= 0:
+        return {
+            "at_max_level":   False,
+            "xp_to_next_level": xp_to_next,
+            "avg_daily_xp":   0.0,
+            "eta_days":       None,
+            "eta_date":       None,
+        }
+
+    eta_days: int = math.ceil(xp_to_next / avg_daily_xp)
+    eta_date: str = (date.today() + timedelta(days=eta_days)).isoformat()
+
+    return {
+        "at_max_level":     False,
+        "xp_to_next_level": xp_to_next,
+        "avg_daily_xp":     round(avg_daily_xp, 1),
+        "eta_days":         eta_days,
+        "eta_date":         eta_date,
     }
 
 

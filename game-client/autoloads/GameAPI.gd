@@ -59,6 +59,7 @@ signal titles_updated(entries: Array)
 signal title_equipped(data: Dictionary)
 signal daily_bonus_updated(data: Dictionary)
 signal focus_streak_updated(data: Dictionary)
+signal xp_projection_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 
@@ -79,6 +80,15 @@ func fetch_focus_streak() -> void:
             focus_streak_updated.emit(data)
         else:
             push_error("GameAPI: /player/focus-streak response is not a Dictionary")
+    )
+
+
+func fetch_xp_projection() -> void:
+    _http_get("/player/xp-projection", func(data: Dictionary) -> void:
+        if data is Dictionary:
+            xp_projection_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/xp-projection response is not a Dictionary")
     )
 
 
