@@ -219,10 +219,10 @@ func _make_filter_row() -> HBoxContainer:
 	row.add_child(sort_label)
 
 	var sort_opt := OptionButton.new()
-	for s in ["Name", "Rarity", "Qty"]:
+	for s in ["Name", "Rarity", "Qty", "Set"]:
 		sort_opt.add_item(s)
 	sort_opt.item_selected.connect(func(idx: int) -> void:
-		_sort_mode = ["name", "rarity", "quantity"][idx]
+		_sort_mode = ["name", "rarity", "quantity", "set"][idx]
 		_rebuild_list(_items_cache)
 	)
 	row.add_child(sort_opt)
@@ -261,6 +261,18 @@ func _apply_filter_sort(items: Array) -> Array:
 			result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 				return a.get("quantity", 1) > b.get("quantity", 1)
 			)
+		"set":
+			result.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				var sa: String = str(a.get("set_id", ""))
+				var sb: String = str(b.get("set_id", ""))
+				var a_has: bool = sa != "" and sa != "null"
+				var b_has: bool = sb != "" and sb != "null"
+				if a_has != b_has:
+					return a_has  # items in a set sort before set-less items
+				if a_has and sa != sb:
+					return sa < sb  # alphabetical within different sets
+				return a.get("name", a.get("item_id", "")) < b.get("name", b.get("item_id", ""))
+			)
 	return result
 
 
@@ -275,8 +287,24 @@ func _rebuild_list(items: Array) -> void:
 		_item_list.add_child(_craft_panel)
 
 	var visible_items := _apply_filter_sort(items)
-	for item in visible_items:
-		_item_list.add_child(_make_card(item))
+
+	if _sort_mode == "set":
+		var last_set: String = "##NONE##"
+		for item in visible_items:
+			var set_id: String = str(item.get("set_id", ""))
+			var in_set: bool = set_id != "" and set_id != "null"
+			var group_key: String = set_id if in_set else ""
+			if group_key != last_set:
+				last_set = group_key
+				var header_lbl := Label.new()
+				header_lbl.text = set_id.replace("_", " ").capitalize() if in_set else "— No set —"
+				header_lbl.modulate = Color(0.55, 0.55, 0.55)
+				header_lbl.add_theme_font_size_override("font_size", 11)
+				_item_list.add_child(header_lbl)
+			_item_list.add_child(_make_card(item))
+	else:
+		for item in visible_items:
+			_item_list.add_child(_make_card(item))
 
 
 func _make_craft_panel() -> VBoxContainer:
