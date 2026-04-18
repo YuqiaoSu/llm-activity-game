@@ -29,6 +29,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "streak_state", "last_goal_streak_date",  "TEXT")
     # Item expiry: NULL = permanent, ISO datetime = expires then
     _safe_add_column(conn, "inventory", "expires_at", "TEXT")
+    # Equipped title: NULL = no title selected
+    _safe_add_column(conn, "player_profile", "equipped_title", "TEXT")
 
 
 def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

@@ -16,6 +16,7 @@ extends Control
 @onready var _pinned_details: VBoxContainer = $VBox/Scroll/PinnedDetails
 
 var _is_polling: bool = false
+var _titles_container: VBoxContainer = null
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -44,10 +45,12 @@ func _ready() -> void:
 	GameAPI.pinned_achievements_updated.connect(_on_pinned)
 	GameAPI.poll_completed.connect(_on_poll_result)
 	GameAPI.daily_stats_updated.connect(_on_daily_stats)
+	GameAPI.titles_updated.connect(_on_titles)
 	_poll_button.pressed.connect(_on_poll_pressed)
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
+	GameAPI.fetch_titles()
 
 
 func _exit_tree() -> void:
@@ -59,6 +62,8 @@ func _exit_tree() -> void:
 		GameAPI.poll_completed.disconnect(_on_poll_result)
 	if GameAPI.daily_stats_updated.is_connected(_on_daily_stats):
 		GameAPI.daily_stats_updated.disconnect(_on_daily_stats)
+	if GameAPI.titles_updated.is_connected(_on_titles):
+		GameAPI.titles_updated.disconnect(_on_titles)
 
 
 func _on_poll_pressed() -> void:
@@ -307,6 +312,57 @@ func _make_sparkline(entries: Array) -> void:
 			var gap := Control.new()
 			gap.custom_minimum_size = Vector2(BAR_GAP, 0)
 			_sparkline_container.add_child(gap)
+
+
+func _on_titles(entries: Array) -> void:
+	if _titles_container == null:
+		var sep := HSeparator.new()
+		sep.modulate = Color(1, 1, 1, 0.15)
+		$VBox/Scroll/PinnedDetails.add_child(sep)
+
+		var header := Label.new()
+		header.text = "Titles"
+		header.add_theme_font_size_override("font_size", 13)
+		header.modulate = Color(0.85, 0.85, 0.85)
+		$VBox/Scroll/PinnedDetails.add_child(header)
+
+		_titles_container = VBoxContainer.new()
+		$VBox/Scroll/PinnedDetails.add_child(_titles_container)
+
+	for child in _titles_container.get_children():
+		child.queue_free()
+
+	var equipped_title := ""
+	for raw in entries:
+		if (raw as Dictionary).get("equipped", false):
+			equipped_title = (raw as Dictionary).get("label", "")
+
+	if equipped_title != "":
+		var badge_row := HBoxContainer.new()
+		var badge_lbl := Label.new()
+		badge_lbl.text = "★ " + equipped_title
+		badge_lbl.modulate = _COLOR_GOLD
+		badge_lbl.add_theme_font_size_override("font_size", 13)
+		badge_row.add_child(badge_lbl)
+		_titles_container.add_child(badge_row)
+
+	for raw in entries:
+		var entry := raw as Dictionary
+		var hbox := HBoxContainer.new()
+		var check := Label.new()
+		check.text = "✓" if entry.get("earned", false) else "✗"
+		check.modulate = Color(0.3, 0.85, 0.3) if entry.get("earned", false) else _COLOR_MUTED
+		check.custom_minimum_size.x = 18
+		var lbl := Label.new()
+		lbl.text = entry.get("label", "")
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		if entry.get("equipped", false):
+			lbl.modulate = _COLOR_GOLD
+		elif not entry.get("earned", false):
+			lbl.modulate = _COLOR_MUTED
+		hbox.add_child(check)
+		hbox.add_child(lbl)
+		_titles_container.add_child(hbox)
 
 
 func _short_date(iso: String) -> String:

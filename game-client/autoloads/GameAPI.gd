@@ -55,6 +55,8 @@ signal item_sets_updated(entries: Array)
 signal challenge_leaderboard_updated(data: Dictionary)
 signal multipliers_updated(entries: Array)
 signal challenge_history_updated(entries: Array)
+signal titles_updated(entries: Array)
+signal title_equipped(data: Dictionary)
 
 var last_challenge_id: String = ""
 
@@ -417,6 +419,24 @@ func fetch_drop_odds(category: String) -> void:
 			drop_odds_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /inventory/drop-odds response is not an Array")
+	)
+
+
+func fetch_titles() -> void:
+	_http_get("/player/titles", func(data) -> void:
+		if data is Array:
+			titles_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /player/titles response is not an Array")
+	)
+
+
+func equip_title(title_id: String) -> void:
+	_http_post("/player/titles/%s/equip" % title_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			title_equipped.emit(data)
+		else:
+			push_error("GameAPI: equip_title %s → %d" % [title_id, code])
 	)
 
 
