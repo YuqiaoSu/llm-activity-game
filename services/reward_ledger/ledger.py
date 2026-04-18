@@ -145,6 +145,21 @@ def insert_challenge_notification(
     })
 
 
+def insert_challenge_progress_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    challenge_id: str,
+    challenge_name: str,
+    pct: int,
+) -> None:
+    """Insert a challenge_progress pending_notification (pct = 50 or 100). Caller commits."""
+    _insert_notification(conn, character_id, "challenge_progress", {
+        "challenge_id": challenge_id,
+        "name": challenge_name,
+        "pct": pct,
+    })
+
+
 def insert_achievement_notification(
     conn: sqlite3.Connection,
     character_id: str,

@@ -11,7 +11,7 @@ job needed. Old weeks become historical records automatically.
 from __future__ import annotations
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from services.reward_ledger.ledger import insert_challenge_notification
+from services.reward_ledger.ledger import insert_challenge_notification, insert_challenge_progress_notification
 
 
 def get_week_start(dt: datetime) -> str:
@@ -96,6 +96,12 @@ def update_weekly_progress(
             """,
             (character_id, cid, week_start, new_progress),
         )
+
+        # Fire 50% progress notification on first half-way crossing
+        old_half = old_progress * 2 >= threshold
+        new_half = new_progress * 2 >= threshold
+        if not was_completed and not old_half and new_half and new_progress < threshold:
+            insert_challenge_progress_notification(conn, character_id, cid, ch["name"], 50)
 
         # Fire completion on first threshold crossing
         if not was_completed and new_progress >= threshold:
