@@ -100,6 +100,16 @@ def record_drop(
     return True
 
 
+def insert_streak_milestone_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    milestone_days: int,
+) -> None:
+    """Insert a streak_milestone pending_notification with the milestone day count."""
+    _insert_notification(conn, character_id, "streak_milestone", {"milestone": milestone_days})
+    conn.commit()
+
+
 def insert_level_up_notification(
     conn: sqlite3.Connection,
     character_id: str,

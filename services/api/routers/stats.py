@@ -56,6 +56,57 @@ def get_stats(request: Request) -> dict:
     }
 
 
+@router.get("/summary")
+def get_stats_summary(request: Request) -> dict:
+    """All-time career summary: XP, activity time, drops, categories."""
+    db = request.app.state.db
+
+    total_xp = get_total_xp(db, "player_default")
+    level = compute_level(total_xp)
+
+    # Per-category all-time XP
+    cat_rows = db.execute(
+        "SELECT category, xp FROM player_category_xp WHERE character_id='player_default'"
+    ).fetchall()
+    category_xp = {c.value: 0 for c in Category}
+    category_xp.update({r["category"]: r["xp"] for r in cat_rows})
+
+    # Total active minutes and total chunks from chunk_log
+    agg = db.execute(
+        "SELECT COUNT(*) AS chunks, COALESCE(SUM(duration_sec), 0) AS dur FROM chunk_log"
+    ).fetchone()
+    total_chunks: int = agg["chunks"]
+    total_active_min: int = agg["dur"] // 60
+
+    # Peak week XP (across all calendar weeks)
+    peak_row = db.execute(
+        """
+        SELECT COALESCE(MAX(week_xp), 0) AS peak
+        FROM (
+            SELECT SUM(xp_awarded) AS week_xp
+            FROM chunk_log
+            GROUP BY strftime('%Y-%W', processed_at)
+        )
+        """
+    ).fetchone()
+    peak_week_xp: int = int(peak_row["peak"])
+
+    # Distinct items ever collected
+    items_collected: int = db.execute(
+        "SELECT COUNT(DISTINCT item_id) FROM reward_ledger"
+    ).fetchone()[0]
+
+    return {
+        "total_xp": total_xp,
+        "level": level,
+        "total_chunks": total_chunks,
+        "total_active_min": total_active_min,
+        "peak_week_xp": peak_week_xp,
+        "items_collected": items_collected,
+        "category_breakdown": category_xp,
+    }
+
+
 @router.get("/daily")
 def get_daily_stats(
     request: Request,

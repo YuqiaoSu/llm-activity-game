@@ -134,10 +134,22 @@ def test_milestone_creates_ledger_entry(db):
     assert chunk_id == _milestone_chunk_id(7)
 
 
-def test_milestone_creates_notification(db):
+def test_milestone_creates_two_notifications(db):
+    # record_drop inserts item_drop; insert_streak_milestone_notification adds streak_milestone
     check_streak_milestone_drop(db, "player_default", 7)
     db.commit()
-    assert _notifications_count(db) == 1
+    assert _notifications_count(db) == 2
+
+
+def test_milestone_notification_has_correct_payload(db):
+    check_streak_milestone_drop(db, "player_default", 14)
+    db.commit()
+    row = db.execute(
+        "SELECT payload FROM pending_notifications WHERE event_type='streak_milestone'"
+    ).fetchone()
+    assert row is not None
+    payload = json.loads(row["payload"])
+    assert payload.get("milestone") == 14
 
 
 def test_zero_streak_does_nothing(db):

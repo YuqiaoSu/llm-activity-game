@@ -10,6 +10,7 @@ SEED_ITEMS: list[ItemDefinition] = [
         drop_requirement=DropRequirement(activity_label="WORK", min_duration_sec=600),
         icon="focus_crystal_common.png",
         description="A small shard of concentrated effort.",
+        set_id="set_focus_tools",
     ),
     ItemDefinition(
         item_id="focus_crystal_rare", name="Radiant Focus Crystal",
@@ -18,6 +19,7 @@ SEED_ITEMS: list[ItemDefinition] = [
         effects=[Effect(effect_type="stat_buff", target="companion", params={"attack": 3})],
         icon="focus_crystal_rare.png",
         description="Forged from hours of deep work.",
+        set_id="set_focus_tools",
     ),
     # GAME
     ItemDefinition(
@@ -42,6 +44,7 @@ SEED_ITEMS: list[ItemDefinition] = [
         drop_requirement=DropRequirement(activity_label="SLEEP", min_duration_sec=14400, time_of_day="night"),
         icon="moonstone.png",
         description="Glows faintly with the memory of good rest.",
+        set_id="set_dreamwalker",
     ),
     ItemDefinition(
         item_id="dreamweave_legendary", name="Dreamweave Shard",
@@ -54,6 +57,7 @@ SEED_ITEMS: list[ItemDefinition] = [
         ],
         icon="dreamweave_legendary.png",
         description="A fragment of a perfect dream. Extremely rare.",
+        set_id="set_dreamwalker",
     ),
     # EXPLORE
     ItemDefinition(
@@ -62,6 +66,7 @@ SEED_ITEMS: list[ItemDefinition] = [
         drop_requirement=DropRequirement(activity_label="EXPLORE", min_duration_sec=900),
         icon="waystone.png",
         description="Still warm from distant roads.",
+        set_id="set_explorer",
     ),
     # SOCIAL
     ItemDefinition(
@@ -96,6 +101,7 @@ SEED_ITEMS: list[ItemDefinition] = [
         effects=[Effect(effect_type="xp_multiplier", target="slot", params={"factor": 1.5})],
         icon="focus_amplifier.png",
         description="Place this in a slot to earn 50% more XP from all activities.",
+        set_id="set_focus_tools",
     ),
     ItemDefinition(
         item_id="fortune_chip_uncommon", name="Fortune Chip",
@@ -114,6 +120,7 @@ SEED_ITEMS: list[ItemDefinition] = [
                         params={"category": "WORK", "factor": 1.3})],
         icon="work_totem.png",
         description="Place this in a slot to earn 30% more XP from WORK activity.",
+        set_id="set_focus_tools",
     ),
     ItemDefinition(
         item_id="game_totem_rare", name="Game Totem",
@@ -132,5 +139,6 @@ SEED_ITEMS: list[ItemDefinition] = [
                         params={"category": "EXPLORE", "factor": 1.5})],
         icon="explore_totem.png",
         description="Place this in a slot to earn 50% more XP from EXPLORE activity.",
+        set_id="set_explorer",
     ),
 ]

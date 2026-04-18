@@ -15,7 +15,7 @@ import logging
 import random
 import sqlite3
 
-from services.reward_ledger.ledger import record_drop
+from services.reward_ledger.ledger import record_drop, insert_streak_milestone_notification
 from services.models.item import ItemDefinition
 
 logger = logging.getLogger(__name__)
@@ -100,6 +100,7 @@ def check_streak_milestone_drop(
         item=winner,
         character_id=character_id,
     )
+    insert_streak_milestone_notification(conn, character_id, current_streak)
     logger.info(
         "Streak milestone %d: granted %s (%s) to %s",
         current_streak, winner.item_id, winner.rarity.value, character_id,

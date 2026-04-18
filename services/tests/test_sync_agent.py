@@ -291,12 +291,12 @@ def test_xp_multiplier_applied_during_poll(db):
 def test_streak_bonus_applied_at_threshold(db):
     """A 3-day streak applies a 1.1× XP bonus on top of base XP."""
     from services.progression.streak import update_streak
-    from datetime import date
+    from datetime import date, timedelta
 
-    # Build a 3-day consecutive streak before polling
+    today = date.today()
+    # Build a 3-day consecutive streak ending today so dormancy bonus doesn't trigger
     for delta in range(3):
-        d = date(2026, 4, 13 + delta)  # 13, 14, 15
-        update_streak(db, d)
+        update_streak(db, today - timedelta(days=2 - delta))
     db.commit()
 
     chunks = [{"chunk_id": "streak_bonus_001", "label": "WORK", "duration_sec": 600,
@@ -315,11 +315,12 @@ def test_streak_bonus_applied_at_threshold(db):
 def test_streak_bonus_not_applied_below_threshold(db):
     """A 2-day streak does NOT apply the 1.1× bonus (threshold is 3)."""
     from services.progression.streak import update_streak
-    from datetime import date
+    from datetime import date, timedelta
 
+    today = date.today()
+    # Build a 2-day streak ending today so dormancy bonus doesn't trigger
     for delta in range(2):
-        d = date(2026, 4, 14 + delta)  # 14, 15
-        update_streak(db, d)
+        update_streak(db, today - timedelta(days=1 - delta))
     db.commit()
 
     chunks = [{"chunk_id": "streak_no_bonus_001", "label": "WORK", "duration_sec": 600,

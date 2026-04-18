@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Request
+from services.progression.xp import get_total_xp, compute_level
+from services.progression.streak import get_streak
 
 router = APIRouter()
 
@@ -15,11 +17,28 @@ def _pinned_ids(db) -> set[str]:
     return {r["achievement_id"] for r in rows}
 
 
+def _player_progress_values(db) -> dict[str, int]:
+    """Compute the current player stat for each condition_type in a single DB pass."""
+    total_xp = get_total_xp(db, "player_default")
+    level = compute_level(total_xp)
+    streak = get_streak(db)
+    items_row = db.execute(
+        "SELECT COUNT(DISTINCT item_id) AS n FROM inventory WHERE character_id='player_default'"
+    ).fetchone()
+    return {
+        "total_xp": total_xp,
+        "level": level,
+        "streak": streak["current_streak"],
+        "items_collected": int(items_row["n"]) if items_row else 0,
+    }
+
+
 @router.get("")
 def get_achievements(request: Request) -> list[dict]:
-    """Return all achievement definitions with unlock and pin status."""
+    """Return all achievement definitions with unlock, pin, and progress info."""
     db = request.app.state.db
     pinned = _pinned_ids(db)
+    progress_vals = _player_progress_values(db)
 
     rows = db.execute(
         """
@@ -34,19 +53,31 @@ def get_achievements(request: Request) -> list[dict]:
         (_PLAYER_ID,),
     ).fetchall()
 
-    return [
-        {
+    result = []
+    for r in rows:
+        threshold = int(r["threshold"])
+        ctype = r["condition_type"]
+        unlocked = r["unlocked_at"] is not None
+        if unlocked:
+            progress = threshold
+            progress_pct = 100
+        else:
+            current = progress_vals.get(ctype, 0)
+            progress = min(current, threshold)
+            progress_pct = min(100, round(progress / threshold * 100)) if threshold > 0 else 100
+        result.append({
             "achievement_id": r["achievement_id"],
             "name":           r["name"],
             "description":    r["description"],
-            "condition_type": r["condition_type"],
-            "threshold":      r["threshold"],
-            "unlocked":       r["unlocked_at"] is not None,
+            "condition_type": ctype,
+            "threshold":      threshold,
+            "unlocked":       unlocked,
             "unlocked_at":    r["unlocked_at"],
             "pinned":         r["achievement_id"] in pinned,
-        }
-        for r in rows
-    ]
+            "progress":       progress,
+            "progress_pct":   progress_pct,
+        })
+    return result
 
 
 @router.get("/pinned")

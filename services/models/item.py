@@ -45,6 +45,7 @@ class ItemDefinition(BaseModel):
     icon: str
     description: str
     stackable: bool = False
+    set_id: str | None = None      # named item set this item belongs to, or None
 
 
 class InventoryItem(BaseModel):

@@ -166,11 +166,41 @@ func _make_row(entry: Dictionary) -> Control:
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	vbox.add_child(desc_lbl)
 
+	# ── progress bar (only for locked achievements) ──────────────────────────
+	if not unlocked:
+		var progress: int     = entry.get("progress", 0) as int
+		var progress_pct: int = entry.get("progress_pct", 0) as int
+		var threshold: int    = entry.get("threshold", 1) as int
+		var ctype: String     = entry.get("condition_type", "")
+
+		var bar := ProgressBar.new()
+		bar.min_value = 0
+		bar.max_value = 100
+		bar.value = progress_pct
+		bar.custom_minimum_size = Vector2(0, 8)
+		bar.show_percentage = false
+		vbox.add_child(bar)
+
+		var prog_lbl := Label.new()
+		prog_lbl.text = "    %s / %s" % [_format_progress(ctype, progress), _format_progress(ctype, threshold)]
+		prog_lbl.modulate = Color(0.65, 0.65, 0.65)
+		prog_lbl.add_theme_font_size_override("font_size", 10)
+		vbox.add_child(prog_lbl)
+
 	var sep := HSeparator.new()
 	sep.modulate = Color(1, 1, 1, 0.12)
 	vbox.add_child(sep)
 
 	return vbox
+
+
+func _format_progress(ctype: String, value: int) -> String:
+	match ctype:
+		"total_xp":        return "%d XP" % value
+		"level":           return "Lv.%d" % value
+		"streak":          return "%d days" % value
+		"items_collected": return "%d items" % value
+		_:                 return str(value)
 
 
 func _condition_hint(ctype: String, threshold: int) -> String:

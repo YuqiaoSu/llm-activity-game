@@ -29,6 +29,12 @@ func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
+	$VBox/Header/SetsButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/ItemSets.tscn")
+	)
+	$VBox/Header/DropOddsButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/DropOdds.tscn")
+	)
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
 	GameAPI.item_discarded.connect(_on_item_discarded)
@@ -548,12 +554,21 @@ func _make_detail_panel(item: Dictionary) -> Control:
 		eff_lbl.add_theme_font_size_override("font_size", 11)
 		panel.add_child(eff_lbl)
 
+	# Expiry warning (shown when item expires within 7 days)
+	var expires_at = item.get("expires_at", null)
+	if expires_at != null:
+		var exp_str: String = str(expires_at)
+		var exp_lbl := Label.new()
+		exp_lbl.text = indent + "⏰ Expires: " + (exp_str.left(10) if exp_str.length() >= 10 else exp_str)
+		exp_lbl.modulate = Color(1.0, 0.35, 0.35)
+		exp_lbl.add_theme_font_size_override("font_size", 10)
+		panel.add_child(exp_lbl)
+
 	# First seen
 	var first_seen = item.get("first_seen_at", null)
 	if first_seen != null:
 		var fs_lbl := Label.new()
 		var fs_str: String = str(first_seen)
-		# Trim to date portion if ISO timestamp
 		if fs_str.length() >= 10:
 			fs_str = fs_str.left(10)
 		fs_lbl.text = indent + "First found: " + fs_str

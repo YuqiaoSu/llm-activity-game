@@ -11,6 +11,9 @@ func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
+	$VBox/Header/SummaryButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/StatsSummary.tscn")
+	)
 	GameAPI.stats_updated.connect(_on_stats)
 	GameAPI.daily_stats_updated.connect(_on_daily_stats)
 	GameAPI.fetch_stats()

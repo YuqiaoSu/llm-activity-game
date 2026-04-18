@@ -1,0 +1,14 @@
+# Normalise line endings: LF in repository, native checkout on Windows
+* text=auto eol=lf
+
+# Explicitly mark binary files so git never mangles them
+*.ico    binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.gguf   binary
+*.db     binary
+*.exe    binary
+*.dll    binary
+*.pyd    binary

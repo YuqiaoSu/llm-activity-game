@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS item_definitions (
 );
 
 -- inventory: items owned by a player character
+-- expires_at: NULL = permanent; ISO datetime = item expires then
 CREATE TABLE IF NOT EXISTS inventory (
     instance_id   TEXT PRIMARY KEY,
     character_id  TEXT NOT NULL,
@@ -20,7 +21,8 @@ CREATE TABLE IF NOT EXISTS inventory (
     acquired_at   TEXT NOT NULL,
     source_chunk  TEXT NOT NULL,
     equipped      INTEGER NOT NULL DEFAULT 0,
-    placed_in     TEXT
+    placed_in     TEXT,
+    expires_at    TEXT
 );
 
 -- reward_ledger: idempotent drop log; (chunk_id, roll_n) prevents re-award on replay

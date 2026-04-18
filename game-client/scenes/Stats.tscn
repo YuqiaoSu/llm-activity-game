@@ -24,6 +24,9 @@ text = "← Back"
 text = "Stats"
 size_flags_horizontal = 3
 
+[node name="SummaryButton" type="Button" parent="VBox/Header"]
+text = "Career →"
+
 [node name="Scroll" type="ScrollContainer" parent="VBox"]
 size_flags_vertical = 3
 

@@ -8,6 +8,7 @@ extends Control
 @onready var _level_label: Label           = $VBox/LevelLabel
 @onready var _xp_label: Label             = $VBox/XPLabel
 @onready var _streak_label: Label          = $VBox/StreakLabel
+@onready var _sparkline_container: HBoxContainer = $VBox/SparklineContainer
 @onready var _poll_button: Button          = $VBox/PollRow/PollButton
 @onready var _poll_status: Label           = $VBox/PollRow/PollStatus
 @onready var _top_cats_list: VBoxContainer = $VBox/TopCatsList
@@ -42,9 +43,11 @@ func _ready() -> void:
 	GameAPI.profile_updated.connect(_on_profile)
 	GameAPI.pinned_achievements_updated.connect(_on_pinned)
 	GameAPI.poll_completed.connect(_on_poll_result)
+	GameAPI.daily_stats_updated.connect(_on_daily_stats)
 	_poll_button.pressed.connect(_on_poll_pressed)
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
+	GameAPI.fetch_daily_stats(7)
 
 
 func _exit_tree() -> void:
@@ -54,6 +57,8 @@ func _exit_tree() -> void:
 		GameAPI.pinned_achievements_updated.disconnect(_on_pinned)
 	if GameAPI.poll_completed.is_connected(_on_poll_result):
 		GameAPI.poll_completed.disconnect(_on_poll_result)
+	if GameAPI.daily_stats_updated.is_connected(_on_daily_stats):
+		GameAPI.daily_stats_updated.disconnect(_on_daily_stats)
 
 
 func _on_poll_pressed() -> void:
@@ -244,6 +249,64 @@ func _rebuild_pinned_details(entries: Array) -> void:
 		vbox.add_child(desc_lbl)
 		vbox.add_child(sep)
 		_pinned_details.add_child(vbox)
+
+
+func _on_daily_stats(entries: Array) -> void:
+	_make_sparkline(entries)
+
+
+func _make_sparkline(entries: Array) -> void:
+	for child in _sparkline_container.get_children():
+		child.queue_free()
+
+	if entries.is_empty():
+		var lbl := Label.new()
+		lbl.text = "no data"
+		lbl.modulate = _COLOR_MUTED
+		_sparkline_container.add_child(lbl)
+		return
+
+	# entries are newest-first from the API; reverse so oldest is left
+	var days: Array = entries.duplicate()
+	days.reverse()
+	# Use only the last 7 days
+	if days.size() > 7:
+		days = days.slice(days.size() - 7)
+
+	var max_xp: int = 1
+	for raw in days:
+		var xp: int = (raw as Dictionary).get("total_xp", 0) as int
+		if xp > max_xp:
+			max_xp = xp
+
+	const MAX_BAR_H := 32
+	const BAR_W     := 18
+	const BAR_GAP   := 3
+	var today_idx := days.size() - 1
+
+	for i in range(days.size()):
+		var day := days[i] as Dictionary
+		var xp: int = day.get("total_xp", 0) as int
+		var bar_h: int = max(2, int(float(xp) / float(max_xp) * MAX_BAR_H))
+
+		var col := _COLOR_GOLD if i == today_idx else Color(0.4, 0.7, 1.0)
+
+		var vbox := VBoxContainer.new()
+		vbox.custom_minimum_size = Vector2(BAR_W, MAX_BAR_H + 4)
+		vbox.alignment = BoxContainer.ALIGNMENT_END
+
+		var bar := ColorRect.new()
+		bar.color = col
+		bar.custom_minimum_size = Vector2(BAR_W, bar_h)
+		bar.size_flags_vertical = Control.SIZE_SHRINK_END
+
+		vbox.add_child(bar)
+		_sparkline_container.add_child(vbox)
+
+		if i < days.size() - 1:
+			var gap := Control.new()
+			gap.custom_minimum_size = Vector2(BAR_GAP, 0)
+			_sparkline_container.add_child(gap)
 
 
 func _short_date(iso: String) -> String:

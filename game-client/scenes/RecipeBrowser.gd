@@ -7,6 +7,7 @@ extends Control
 const _COLOR_CAN_CRAFT   := Color(0.3, 0.9, 0.3)
 const _COLOR_CANT_CRAFT  := Color(0.55, 0.55, 0.55)
 const _COLOR_CATEGORY    := Color(1.0, 0.85, 0.3)
+const _COLOR_PARTIAL     := Color(1.0, 0.75, 0.2)
 
 const _RARITY_COLOR := {
 	"COMMON":    Color(0.75, 0.75, 0.75),
@@ -15,6 +16,8 @@ const _RARITY_COLOR := {
 	"EPIC":      Color(0.75, 0.35, 1.00),
 	"LEGENDARY": Color(1.00, 0.65, 0.10),
 }
+
+const _RARITY_ORDER := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 
 
 func _ready() -> void:
@@ -43,7 +46,6 @@ func _on_craft_result(ok: bool, data: Dictionary) -> void:
 		var detail: String = data.get("detail", "Craft failed")
 		_status_lbl.text = "✗ %s" % detail
 		_status_lbl.modulate = Color(1.0, 0.4, 0.4)
-	# Refresh so can_craft flags update
 	GameAPI.fetch_recipes()
 
 
@@ -58,16 +60,17 @@ func _on_recipes(recipes: Array) -> void:
 		_list.add_child(lbl)
 		return
 
-	# Group by category
+	# Group by category → { from_rarity: entry }
 	var by_cat: Dictionary = {}
 	for raw in recipes:
 		if not raw is Dictionary:
 			continue
 		var entry := raw as Dictionary
-		var cat: String = entry.get("category", "?")
+		var cat: String   = entry.get("category", "?")
+		var from_r: String = entry.get("from_rarity", "?")
 		if not by_cat.has(cat):
-			by_cat[cat] = []
-		by_cat[cat].append(entry)
+			by_cat[cat] = {}
+		(by_cat[cat] as Dictionary)[from_r] = entry
 
 	for cat in by_cat:
 		var cat_lbl := Label.new()
@@ -76,45 +79,65 @@ func _on_recipes(recipes: Array) -> void:
 		cat_lbl.add_theme_font_size_override("font_size", 13)
 		_list.add_child(cat_lbl)
 
-		for entry in by_cat[cat] as Array:
-			_list.add_child(_make_recipe_row(entry as Dictionary))
+		var rarity_map: Dictionary = by_cat[cat] as Dictionary
+		for r in _RARITY_ORDER:
+			if rarity_map.has(r):
+				_list.add_child(_make_ladder_rung(rarity_map[r] as Dictionary))
 
 		var sep := HSeparator.new()
 		sep.modulate = Color(1, 1, 1, 0.15)
 		_list.add_child(sep)
 
 
-func _make_recipe_row(entry: Dictionary) -> Control:
-	var from_r:   String = entry.get("from_rarity", "?")
-	var to_r:     String = entry.get("to_rarity", "")
-	var can_craft: bool  = bool(entry.get("can_craft", false))
-	var have:     int    = entry.get("have_item_types", 0) as int
-	var item_ids: Array  = entry.get("item_ids", [])
+func _make_ladder_rung(entry: Dictionary) -> Control:
+	var from_r:    String = entry.get("from_rarity", "?")
+	var to_r:      String = entry.get("to_rarity", "")
+	var can_craft: bool   = bool(entry.get("can_craft", false))
+	var have:      int    = entry.get("have_item_types", 0) as int
+	var item_ids:  Array  = entry.get("item_ids", [])
+	var need_more: int    = max(0, 2 - have)
 
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 6)
 
-	# Rarity arrow label
+	# Source rarity badge
 	var from_col: Color = _RARITY_COLOR.get(from_r, Color.WHITE)
-	var to_col:   Color = _RARITY_COLOR.get(to_r, Color.WHITE) if to_r else Color.GRAY
-
 	var rarity_lbl := Label.new()
+	rarity_lbl.text = "[%s]" % from_r
+	rarity_lbl.modulate = from_col
+	rarity_lbl.add_theme_font_size_override("font_size", 11)
+	rarity_lbl.custom_minimum_size.x = 110
+
+	# Arrow + destination rarity (or max-tier marker)
+	var arrow_lbl := Label.new()
+	arrow_lbl.add_theme_font_size_override("font_size", 11)
+	arrow_lbl.custom_minimum_size.x = 110
 	if to_r:
-		rarity_lbl.text = "%s → %s" % [from_r, to_r]
+		var to_col: Color = _RARITY_COLOR.get(to_r, Color.WHITE)
+		arrow_lbl.text = "→ %s" % to_r
+		arrow_lbl.modulate = to_col if can_craft else _COLOR_CANT_CRAFT
 	else:
-		rarity_lbl.text = "%s (max)" % from_r
-	rarity_lbl.modulate = from_col if can_craft else _COLOR_CANT_CRAFT
-	rarity_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		arrow_lbl.text = "★ max tier"
+		arrow_lbl.modulate = _RARITY_COLOR.get(from_r, Color.WHITE)
 
-	# Availability count
-	var have_lbl := Label.new()
-	have_lbl.text = "(%d types)" % have
-	have_lbl.modulate = _COLOR_CAN_CRAFT if can_craft else _COLOR_CANT_CRAFT
-	have_lbl.add_theme_font_size_override("font_size", 10)
+	# Progress status
+	var status_lbl := Label.new()
+	status_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	status_lbl.add_theme_font_size_override("font_size", 10)
+	if can_craft:
+		status_lbl.text = "%d type%s ready" % [have, "s" if have != 1 else ""]
+		status_lbl.modulate = _COLOR_CAN_CRAFT
+	elif have > 0:
+		status_lbl.text = "%d/%d — need %d more" % [have, 2, need_more]
+		status_lbl.modulate = _COLOR_PARTIAL
+	else:
+		status_lbl.text = "none yet"
+		status_lbl.modulate = _COLOR_CANT_CRAFT
 
-	# Craft button
+	# Craft button (only for non-max tiers)
 	var craft_btn := Button.new()
-	craft_btn.text = "Craft 2×"
+	craft_btn.text = "Craft →"
+	craft_btn.add_theme_font_size_override("font_size", 10)
 	craft_btn.disabled = not can_craft or item_ids.size() < 2 or to_r.is_empty()
 	if not craft_btn.disabled:
 		var id_a: String = item_ids[0] as String
@@ -126,6 +149,7 @@ func _make_recipe_row(entry: Dictionary) -> Control:
 		)
 
 	row.add_child(rarity_lbl)
-	row.add_child(have_lbl)
+	row.add_child(arrow_lbl)
+	row.add_child(status_lbl)
 	row.add_child(craft_btn)
 	return row

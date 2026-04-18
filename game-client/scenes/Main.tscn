@@ -115,6 +115,12 @@ text = "Recipes →"
 [node name="ProfileButton" type="Button" parent="VBox/Buttons"]
 text = "Profile →"
 
+[node name="CompareButton" type="Button" parent="VBox/Buttons"]
+text = "Compare →"
+
+[node name="FeedButton" type="Button" parent="VBox/Buttons"]
+text = "Feed →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

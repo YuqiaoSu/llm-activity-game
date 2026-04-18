@@ -24,6 +24,12 @@ text = "← Back"
 text = "Inventory"
 size_flags_horizontal = 3
 
+[node name="SetsButton" type="Button" parent="VBox/Header"]
+text = "Sets →"
+
+[node name="DropOddsButton" type="Button" parent="VBox/Header"]
+text = "Drop Odds →"
+
 [node name="Scroll" type="ScrollContainer" parent="VBox"]
 size_flags_vertical = 3
 

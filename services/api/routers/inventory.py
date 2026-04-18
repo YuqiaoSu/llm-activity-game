@@ -2,8 +2,10 @@ import json
 import random
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel
+from services.drop_engine.lottery import DEFAULT_RARITY_WEIGHTS
+from services.models.enums import Category
 
 router = APIRouter()
 
@@ -24,8 +26,11 @@ class FuseRequest(BaseModel):
 def get_inventory(request: Request) -> list[dict]:
     """Return inventory grouped by item_id with a quantity count.
 
-    Each entry represents one distinct item type owned by the player,
-    with `quantity` showing how many copies they hold.
+    Each entry represents one distinct item type owned by the player.
+    Expired items (expires_at < now) are excluded from counts and hidden
+    once all instances have expired.  expires_at in the response is the
+    earliest non-NULL expiry across all non-expired instances, or NULL
+    for permanent items.
     """
     db = request.app.state.db
     rows = db.execute(
@@ -33,11 +38,16 @@ def get_inventory(request: Request) -> list[dict]:
         SELECT
             i.item_id,
             i.character_id,
-            COUNT(*)                               AS quantity,
+            COUNT(CASE WHEN i.expires_at IS NULL OR i.expires_at > datetime('now') THEN 1 END)
+                                                   AS quantity,
             MAX(i.acquired_at)                     AS last_acquired_at,
             MAX(CASE WHEN i.equipped THEN 1 ELSE 0 END) AS equipped,
-            MIN(CASE WHEN i.placed_in IS NULL THEN i.instance_id ELSE NULL END)
-                                                   AS available_instance_id,
+            MIN(CASE WHEN i.placed_in IS NULL
+                          AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
+                     THEN i.instance_id END)       AS available_instance_id,
+            MIN(CASE WHEN i.expires_at IS NOT NULL
+                          AND i.expires_at > datetime('now')
+                     THEN i.expires_at END)        AS expires_at,
             json_extract(d.data, '$.name')         AS name,
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
@@ -51,6 +61,7 @@ def get_inventory(request: Request) -> list[dict]:
             ON i.item_id = c.item_id AND c.player_id = 'player_default'
         WHERE i.character_id = 'player_default'
         GROUP BY i.item_id, i.character_id
+        HAVING quantity > 0
         ORDER BY last_acquired_at DESC
         """
     ).fetchall()
@@ -58,7 +69,6 @@ def get_inventory(request: Request) -> list[dict]:
     result = []
     for row in rows:
         d = dict(row)
-        # Parse effects_json into a list so the client gets structured data
         raw_effects = d.pop("effects_json", None)
         d["effects"] = _json.loads(raw_effects) if raw_effects else []
         d["description"] = d.get("description") or ""
@@ -261,6 +271,137 @@ def get_recipes(request: Request) -> list[dict]:
             "have_item_types": distinct,
             "can_craft":       distinct >= 2,
             "item_ids":        item_ids,
+        })
+
+    return result
+
+
+@router.get("/drop-odds")
+def get_drop_odds(
+    request: Request,
+    category: str = Query(..., description="Category name e.g. WORK"),
+) -> list[dict]:
+    """Return drop probability for each item in a given category.
+
+    Probabilities are computed from DEFAULT_RARITY_WEIGHTS and normalised
+    to percentages across all items in that category.
+    Returns items sorted by probability descending.
+    """
+    category_upper = category.upper()
+    valid_categories = {c.value for c in Category}
+    if category_upper not in valid_categories:
+        raise HTTPException(status_code=422, detail=f"Unknown category: {category!r}")
+
+    db = request.app.state.db
+    rows = db.execute(
+        "SELECT item_id, data FROM item_definitions"
+        " WHERE json_extract(data, '$.category') = ?",
+        (category_upper,),
+    ).fetchall()
+
+    items_raw: list[dict] = []
+    for row in rows:
+        try:
+            d = json.loads(row["data"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        rarity_str = d.get("rarity", "COMMON")
+        from services.models.enums import Rarity
+        try:
+            rarity_enum = Rarity(rarity_str)
+        except ValueError:
+            rarity_enum = Rarity.COMMON
+        weight = DEFAULT_RARITY_WEIGHTS.get(rarity_enum, 1.0)
+        items_raw.append({
+            "item_id":  row["item_id"],
+            "name":     d.get("name", row["item_id"]),
+            "rarity":   rarity_str,
+            "_weight":  weight,
+        })
+
+    if not items_raw:
+        return []
+
+    total_weight = sum(i["_weight"] for i in items_raw)
+    result: list[dict] = []
+    for item in items_raw:
+        pct = round(item["_weight"] / total_weight * 100, 2) if total_weight > 0 else 0.0
+        result.append({
+            "item_id":         item["item_id"],
+            "name":            item["name"],
+            "rarity":          item["rarity"],
+            "weight":          item["_weight"],
+            "probability_pct": pct,
+        })
+
+    result.sort(key=lambda x: x["probability_pct"], reverse=True)
+    return result
+
+
+@router.get("/sets")
+def get_item_sets(request: Request) -> list[dict]:
+    """Return all named item sets with per-item owned status.
+
+    A "set" is defined by items sharing the same `set_id` in their JSON data.
+    Each set entry: {set_id, items: [{item_id, name, rarity, owned}],
+                     owned_count, total_count, complete}
+    Items are sorted by rarity within each set.
+    """
+    db = request.app.state.db
+
+    # Load all item_definitions that have a set_id
+    rows = db.execute(
+        "SELECT item_id, data FROM item_definitions"
+        " WHERE json_extract(data, '$.set_id') IS NOT NULL"
+    ).fetchall()
+
+    if not rows:
+        return []
+
+    # Determine which item_ids the player currently owns (non-expired)
+    owned_rows = db.execute(
+        """
+        SELECT DISTINCT item_id
+        FROM inventory
+        WHERE character_id = 'player_default'
+          AND (expires_at IS NULL OR expires_at > datetime('now'))
+        """
+    ).fetchall()
+    owned_ids: set[str] = {r["item_id"] for r in owned_rows}
+
+    _RARITY_ORDER = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
+
+    # Group by set_id
+    sets: dict[str, list[dict]] = {}
+    for row in rows:
+        try:
+            d = json.loads(row["data"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        set_id: str = d.get("set_id") or ""
+        if not set_id:
+            continue
+        item_id = row["item_id"]
+        if set_id not in sets:
+            sets[set_id] = []
+        sets[set_id].append({
+            "item_id": item_id,
+            "name":    d.get("name", item_id),
+            "rarity":  d.get("rarity", "COMMON"),
+            "owned":   item_id in owned_ids,
+        })
+
+    result: list[dict] = []
+    for set_id, items in sorted(sets.items()):
+        items.sort(key=lambda i: _RARITY_ORDER.index(i["rarity"])
+                   if i["rarity"] in _RARITY_ORDER else 99)
+        owned_count = sum(1 for i in items if i["owned"])
+        result.append({
+            "set_id":       set_id,
+            "items":        items,
+            "owned_count":  owned_count,
+            "total_count":  len(items),
+            "complete":     owned_count == len(items),
         })
 
     return result
