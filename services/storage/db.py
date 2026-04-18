@@ -31,6 +31,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "inventory", "expires_at", "TEXT")
     # Equipped title: NULL = no title selected
     _safe_add_column(conn, "player_profile", "equipped_title", "TEXT")
+    # Focus streak: consecutive poll-days with ≥1 WORK or LEARN chunk
+    _safe_add_column(conn, "streak_state", "focus_streak",      "INTEGER NOT NULL DEFAULT 0")
+    _safe_add_column(conn, "streak_state", "last_focus_date",   "TEXT")
 
 
 def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

@@ -58,6 +58,7 @@ signal challenge_history_updated(entries: Array)
 signal titles_updated(entries: Array)
 signal title_equipped(data: Dictionary)
 signal daily_bonus_updated(data: Dictionary)
+signal focus_streak_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 
@@ -69,6 +70,15 @@ func fetch_profile() -> void:
     _http_get("/player/profile", func(data: Dictionary) -> void:
         _cached_profile = data
         profile_updated.emit(data)
+    )
+
+
+func fetch_focus_streak() -> void:
+    _http_get("/player/focus-streak", func(data: Dictionary) -> void:
+        if data is Dictionary:
+            focus_streak_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/focus-streak response is not a Dictionary")
     )
 
 

@@ -18,6 +18,7 @@ from services.place_service.effects import load_active_effects, compute_set_bonu
 from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
 from services.progression.achievement_milestones import check_and_unlock_milestones
+from services.progression.focus_streak import update_focus_streak, has_focus_chunks
 from services.progression.weekly_challenges import update_weekly_progress
 from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress, check_goal_streak_reward
 from services.notifications.desktop import notify_level_up
@@ -305,6 +306,9 @@ class SyncAgent:
         update_streak(self.db, datetime.now(timezone.utc).date())
         streak = get_streak(self.db)
         check_streak_milestone_drop(self.db, self.character_id, streak["current_streak"])
+
+        # Update focus streak (WORK/LEARN sessions)
+        update_focus_streak(self.db, has_focus_chunks(chunk_dicts))
 
         # Check and unlock any newly-met achievements (DB-seeded + code-level milestones)
         check_achievements(self.db, self.character_id)

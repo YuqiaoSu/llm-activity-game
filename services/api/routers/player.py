@@ -8,6 +8,7 @@ from services.progression.streak import get_streak
 from services.progression.config import EVOLUTION_STAGES
 from services.progression.decay import get_dormancy_info
 from services.progression.mood import compute_mood
+from services.progression.focus_streak import get_focus_streak
 
 router = APIRouter()
 
@@ -169,6 +170,13 @@ def get_player_profile(request: Request) -> dict:
         "equipped_items": equipped_items,
         "equipped_title": row["equipped_title"] if "equipped_title" in row.keys() else None,
     }
+
+
+@router.get("/focus-streak")
+def get_focus_streak_status(request: Request) -> dict:
+    """Return the player's current focus streak — consecutive days with WORK/LEARN activity."""
+    db = request.app.state.db
+    return get_focus_streak(db)
 
 
 @router.get("/titles")

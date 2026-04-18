@@ -48,6 +48,7 @@ func _ready() -> void:
 	GameAPI.poll_completed.connect(_on_poll_result)
 	GameAPI.daily_stats_updated.connect(_on_daily_stats)
 	GameAPI.titles_updated.connect(_on_titles)
+	GameAPI.focus_streak_updated.connect(_on_focus_streak)
 	_poll_button.pressed.connect(_on_poll_pressed)
 
 	# Build rename row once; insert after NameLabel in VBox
@@ -92,6 +93,7 @@ func _ready() -> void:
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
 	GameAPI.fetch_titles()
+	GameAPI.fetch_focus_streak()
 
 
 func _exit_tree() -> void:
@@ -105,6 +107,8 @@ func _exit_tree() -> void:
 		GameAPI.daily_stats_updated.disconnect(_on_daily_stats)
 	if GameAPI.titles_updated.is_connected(_on_titles):
 		GameAPI.titles_updated.disconnect(_on_titles)
+	if GameAPI.focus_streak_updated.is_connected(_on_focus_streak):
+		GameAPI.focus_streak_updated.disconnect(_on_focus_streak)
 
 
 func _on_poll_pressed() -> void:
@@ -354,6 +358,30 @@ func _make_sparkline(entries: Array) -> void:
 			var gap := Control.new()
 			gap.custom_minimum_size = Vector2(BAR_GAP, 0)
 			_sparkline_container.add_child(gap)
+
+
+func _on_focus_streak(data: Dictionary) -> void:
+	var streak: int = data.get("focus_streak", 0) as int
+	if streak <= 0:
+		return
+	if _titles_container == null:
+		# Titles section not yet built; it will show focus streak when _on_titles fires
+		return
+	# Append or update focus streak badge after title list
+	var fid := "focus_streak_badge"
+	for child in _titles_container.get_children():
+		if child.name == fid:
+			child.queue_free()
+	var badge := Label.new()
+	badge.name = fid
+	var next_at = data.get("next_reward_at", null)
+	if next_at != null:
+		badge.text = "🎯 Focus streak: %d day(s) · reward at %d" % [streak, next_at as int]
+	else:
+		badge.text = "🎯 Focus streak: %d day(s) · milestone reached!" % streak
+	badge.modulate = Color(0.40, 0.85, 1.00)
+	badge.add_theme_font_size_override("font_size", 11)
+	_titles_container.add_child(badge)
 
 
 func _on_titles(entries: Array) -> void:
