@@ -122,6 +122,14 @@ func _make_row(entry: Dictionary) -> Control:
 		)
 		hbox.add_child(claim_btn)
 
+	var lb_btn := Button.new()
+	lb_btn.text = "🏆"
+	lb_btn.pressed.connect(func() -> void:
+		GameAPI.last_challenge_id = challenge_id
+		get_tree().change_scene_to_file("res://scenes/ChallengeLeaderboard.tscn")
+	)
+	hbox.add_child(lb_btn)
+
 	vbox.add_child(hbox)
 
 	# ── description (smaller, indented) ──────────────────────────────────────

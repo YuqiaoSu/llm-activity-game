@@ -1,6 +1,6 @@
 from __future__ import annotations
 import random
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from services.progression.weekly_challenges import get_week_start
 from services.progression.xp import award_category_xp, get_total_xp, compute_level
 from services.models.enums import Category
@@ -8,6 +8,21 @@ from services.reward_ledger.ledger import insert_level_up_notification
 from datetime import datetime, timezone
 
 router = APIRouter()
+
+# Fixed fraction of each challenge's threshold assigned as each ghost's score.
+# Grinder slightly exceeds threshold (shows "completed"), Focus is beatable
+# mid-week, Casual is trivially easy — creating a natural difficulty spread.
+_GHOST_FRACTIONS: dict[str, float] = {
+    "ghost_grinder": 1.10,
+    "ghost_focus":   0.75,
+    "ghost_casual":  0.30,
+}
+
+_GHOST_NAMES: dict[str, str] = {
+    "ghost_grinder": "XP Grinder",
+    "ghost_focus":   "FocusBot",
+    "ghost_casual":  "CasualMax",
+}
 
 # XP bonus awarded when a player claims a completed challenge reward
 _CLAIM_REWARD_XP = 50
@@ -204,4 +219,70 @@ def reroll_challenge(request: Request) -> dict:
         "progress":    0,
         "completed":   False,
         "week_start":  week_start,
+    }
+
+
+@router.get("/leaderboard")
+def get_challenge_leaderboard(
+    request: Request,
+    challenge_id: str = Query(..., description="Challenge to show leaderboard for"),
+) -> dict:
+    """Return a mini leaderboard for one weekly challenge.
+
+    Compares the player's current progress against three ghost players whose
+    scores are fixed fractions of the challenge threshold. Returns player score,
+    all ghost entries with rank, and the player's own rank among all entries.
+    """
+    db = request.app.state.db
+    week_start = get_week_start(datetime.now(timezone.utc))
+
+    challenge_row = db.execute(
+        "SELECT threshold FROM weekly_challenges WHERE challenge_id=?",
+        (challenge_id,),
+    ).fetchone()
+    if challenge_row is None:
+        raise HTTPException(status_code=404, detail="Challenge not found")
+
+    threshold: int = int(challenge_row["threshold"])
+
+    progress_row = db.execute(
+        """
+        SELECT COALESCE(progress, 0) AS progress
+        FROM player_weekly_progress
+        WHERE player_id='player_default' AND challenge_id=? AND week_start=?
+        """,
+        (challenge_id, week_start),
+    ).fetchone()
+    player_score = int(progress_row["progress"]) if progress_row else 0
+
+    ghosts = [
+        {
+            "player_id": gid,
+            "name":      _GHOST_NAMES[gid],
+            "score":     min(threshold, int(threshold * frac)),
+            "rank":      0,
+        }
+        for gid, frac in _GHOST_FRACTIONS.items()
+    ]
+
+    # Rank all entries together (player + ghosts)
+    all_scores = sorted(
+        [player_score] + [g["score"] for g in ghosts], reverse=True
+    )
+    # Build score → rank (dense rank: ties share rank)
+    unique_scores = sorted(set(all_scores), reverse=True)
+    score_to_rank = {s: i + 1 for i, s in enumerate(unique_scores)}
+
+    for g in ghosts:
+        g["rank"] = score_to_rank[g["score"]]
+
+    your_rank = score_to_rank[player_score]
+
+    return {
+        "challenge_id":  challenge_id,
+        "threshold":     threshold,
+        "player_score":  player_score,
+        "your_rank":     your_rank,
+        "total_entries": 1 + len(ghosts),
+        "ghosts":        ghosts,
     }

@@ -46,6 +46,15 @@ signal achievement_unpinned(data: Dictionary)
 signal wishlist_updated(entries: Array)
 signal wishlist_toggled(data: Dictionary)
 signal daily_recap_updated(data: Dictionary)
+signal compare_updated(data: Dictionary)
+signal race_updated(data: Dictionary)
+signal feed_updated(entries: Array)
+signal stats_summary_updated(data: Dictionary)
+signal drop_odds_updated(entries: Array)
+signal item_sets_updated(entries: Array)
+signal challenge_leaderboard_updated(data: Dictionary)
+
+var last_challenge_id: String = ""
 
 
 func fetch_profile() -> void:
@@ -379,6 +388,69 @@ func add_to_wishlist(item_id: String) -> void:
 			wishlist_toggled.emit(data)
 		else:
 			push_error("GameAPI: add_to_wishlist %s → %d" % [item_id, code])
+	)
+
+
+func fetch_feed(limit: int = 20) -> void:
+	_http_get("/feed?limit=%d" % limit, func(data) -> void:
+		if data is Array:
+			feed_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /feed response is not an Array")
+	)
+
+
+func fetch_item_sets() -> void:
+	_http_get("/inventory/sets", func(data) -> void:
+		if data is Array:
+			item_sets_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory/sets response is not an Array")
+	)
+
+
+func fetch_drop_odds(category: String) -> void:
+	_http_get("/inventory/drop-odds?category=%s" % category, func(data) -> void:
+		if data is Array:
+			drop_odds_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory/drop-odds response is not an Array")
+	)
+
+
+func fetch_challenge_leaderboard(challenge_id: String) -> void:
+	_http_get("/challenges/leaderboard?challenge_id=%s" % challenge_id, func(data) -> void:
+		if data is Dictionary:
+			challenge_leaderboard_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /challenges/leaderboard response is not a Dictionary")
+	)
+
+
+func fetch_stats_summary() -> void:
+	_http_get("/stats/summary", func(data) -> void:
+		if data is Dictionary:
+			stats_summary_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /stats/summary response is not a Dictionary")
+	)
+
+
+func fetch_race(other_id: String) -> void:
+	_http_get("/leaderboard/race?other_id=%s" % other_id, func(data) -> void:
+		if data is Dictionary:
+			race_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /leaderboard/race response is not a Dictionary")
+	)
+
+
+func fetch_compare(other_id: String) -> void:
+	_http_get("/leaderboard/compare?other_id=%s" % other_id, func(data) -> void:
+		if data is Dictionary:
+			compare_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /leaderboard/compare response is not a Dictionary")
 	)
 
 
