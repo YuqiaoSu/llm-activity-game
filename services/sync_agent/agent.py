@@ -17,6 +17,7 @@ from services.place_service.service import list_places, check_unlock_condition
 from services.place_service.effects import load_active_effects, compute_set_bonuses, load_place_perks
 from services.progression.streak import update_streak, get_streak
 from services.progression.achievements import check_achievements
+from services.progression.achievement_milestones import check_and_unlock_milestones
 from services.progression.weekly_challenges import update_weekly_progress
 from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress, check_goal_streak_reward
 from services.notifications.desktop import notify_level_up
@@ -305,8 +306,9 @@ class SyncAgent:
         streak = get_streak(self.db)
         check_streak_milestone_drop(self.db, self.character_id, streak["current_streak"])
 
-        # Check and unlock any newly-met achievements
+        # Check and unlock any newly-met achievements (DB-seeded + code-level milestones)
         check_achievements(self.db, self.character_id)
+        check_and_unlock_milestones(self.db, self.character_id)
 
         # Update weekly challenge progress
         update_weekly_progress(self.db, self.character_id, xp_earned_this_poll)
