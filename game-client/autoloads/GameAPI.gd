@@ -63,6 +63,7 @@ signal xp_projection_updated(data: Dictionary)
 signal place_leaderboard_updated(entries: Array)
 signal skills_updated(entries: Array)
 signal skill_unlocked(data: Dictionary)
+signal calendar_updated(entries: Array)
 
 var last_challenge_id: String = ""
 
@@ -110,6 +111,15 @@ func fetch_skills() -> void:
             skills_updated.emit(data as Array)
         else:
             push_error("GameAPI: /skills response is not an Array")
+    )
+
+
+func fetch_calendar(months: int = 1) -> void:
+    _http_get("/history/calendar?months=%d" % months, func(data) -> void:
+        if data is Array:
+            calendar_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /history/calendar response is not an Array")
     )
 
 

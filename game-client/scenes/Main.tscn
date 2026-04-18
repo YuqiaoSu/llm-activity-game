@@ -124,6 +124,9 @@ text = "Feed →"
 [node name="SkillsButton" type="Button" parent="VBox/Buttons"]
 text = "Skills →"
 
+[node name="CalendarButton" type="Button" parent="VBox/Buttons"]
+text = "Calendar →"
+
 [node name="AutoPollTimer" type="Timer" parent="."]
 wait_time = 300.0
 autostart = true

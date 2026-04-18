@@ -109,6 +109,47 @@ def get_heatmap(
     return result
 
 
+@router.get("/calendar")
+def get_calendar(
+    request: Request,
+    months: int = Query(default=1, ge=1, le=12),
+) -> list[dict]:
+    """Return one entry per day for the last N calendar months.
+
+    Each entry: {date, active, xp, intensity (0-4)}.
+    Days with no activity have xp=0, active=false, intensity=0.
+    Returns entries oldest-first within the window.
+    """
+    db = request.app.state.db
+    today = date.today()
+    # Go back months*31 days as a safe approximation covering N calendar months
+    start = today - timedelta(days=months * 31)
+
+    rows = db.execute(
+        """
+        SELECT DATE(processed_at) AS day, SUM(xp_awarded) AS total_xp
+        FROM chunk_log
+        WHERE DATE(processed_at) >= ?
+        GROUP BY day
+        """,
+        (start.isoformat(),),
+    ).fetchall()
+    xp_by_day: dict[str, int] = {r["day"]: int(r["total_xp"]) for r in rows}
+
+    result: list[dict] = []
+    total_days = (today - start).days + 1
+    for i in range(total_days):
+        d = (start + timedelta(days=i)).isoformat()
+        xp = xp_by_day.get(d, 0)
+        result.append({
+            "date":      d,
+            "xp":        xp,
+            "active":    xp > 0,
+            "intensity": _intensity(xp),
+        })
+    return result
+
+
 @router.get("")
 def get_history(request: Request) -> list[dict]:
     db = request.app.state.db
