@@ -60,6 +60,7 @@ signal title_equipped(data: Dictionary)
 signal daily_bonus_updated(data: Dictionary)
 signal focus_streak_updated(data: Dictionary)
 signal xp_projection_updated(data: Dictionary)
+signal place_leaderboard_updated(entries: Array)
 
 var last_challenge_id: String = ""
 
@@ -89,6 +90,15 @@ func fetch_xp_projection() -> void:
             xp_projection_updated.emit(data)
         else:
             push_error("GameAPI: /player/xp-projection response is not a Dictionary")
+    )
+
+
+func fetch_place_leaderboard() -> void:
+    _http_get("/places/leaderboard", func(data) -> void:
+        if data is Array:
+            place_leaderboard_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /places/leaderboard response is not an Array")
     )
 
 

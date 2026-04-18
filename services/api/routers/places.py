@@ -113,6 +113,25 @@ def _add_set_bonus_flag(db, place_dicts: list[dict]) -> list[dict]:
     return place_dicts
 
 
+@router.get("/leaderboard")
+def get_place_leaderboard(request: Request) -> list[dict]:
+    """Return unlocked places ranked by total XP earned (desc)."""
+    db = request.app.state.db
+    rows = db.execute(
+        "SELECT place_id, name, level, xp FROM places WHERE state='UNLOCKED' ORDER BY xp DESC, name ASC"
+    ).fetchall()
+    return [
+        {
+            "rank":     idx + 1,
+            "place_id": row["place_id"],
+            "name":     row["name"],
+            "level":    row["level"],
+            "xp":       row["xp"],
+        }
+        for idx, row in enumerate(rows)
+    ]
+
+
 @router.get("")
 def get_places(request: Request) -> list[dict]:
     db = request.app.state.db
