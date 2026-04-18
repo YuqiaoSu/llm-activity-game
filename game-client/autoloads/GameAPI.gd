@@ -53,6 +53,7 @@ signal stats_summary_updated(data: Dictionary)
 signal drop_odds_updated(entries: Array)
 signal item_sets_updated(entries: Array)
 signal challenge_leaderboard_updated(data: Dictionary)
+signal multipliers_updated(entries: Array)
 
 var last_challenge_id: String = ""
 
@@ -415,6 +416,15 @@ func fetch_drop_odds(category: String) -> void:
 			drop_odds_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /inventory/drop-odds response is not an Array")
+	)
+
+
+func fetch_multipliers() -> void:
+	_http_get("/sync/multipliers", func(data) -> void:
+		if data is Array:
+			multipliers_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /sync/multipliers response is not an Array")
 	)
 
 

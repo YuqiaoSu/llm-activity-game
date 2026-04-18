@@ -11,6 +11,7 @@ extends Control
 
 var _is_polling: bool = false
 var _event_badge: Label = null   # created lazily on first active event
+var _boost_label: Label = null   # created lazily when multipliers are active
 
 # Cached dormancy state so Welcome Back overlay can reference pre-poll profile
 var _was_dormant: bool = false
@@ -102,10 +103,18 @@ func _ready() -> void:
 	$VBox/Buttons/ProfileButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/ProfileCard.tscn")
 	)
+	$VBox/Buttons/CompareButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/FriendCompare.tscn")
+	)
+	$VBox/Buttons/FeedButton.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/Feed.tscn")
+	)
 	GameAPI.active_events_updated.connect(_on_active_events)
+	GameAPI.multipliers_updated.connect(_on_multipliers)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 	GameAPI.fetch_active_events()
+	GameAPI.fetch_multipliers()
 
 
 func _exit_tree() -> void:
@@ -117,6 +126,8 @@ func _exit_tree() -> void:
 		GameAPI.poll_summary_ready.disconnect(_on_poll_summary)
 	if GameAPI.active_events_updated.is_connected(_on_active_events):
 		GameAPI.active_events_updated.disconnect(_on_active_events)
+	if GameAPI.multipliers_updated.is_connected(_on_multipliers):
+		GameAPI.multipliers_updated.disconnect(_on_multipliers)
 
 
 func _on_profile(data: Dictionary) -> void:
@@ -218,6 +229,7 @@ func _on_poll_result(result: String) -> void:
 		"OK":
 			_poll_status.text = "Rewards processed!"
 			GameAPI.fetch_profile()
+			GameAPI.fetch_multipliers()
 		"NO_NEW_CHUNKS":
 			_poll_status.text = "No new activity"
 		"ON_COOLDOWN":
@@ -293,6 +305,33 @@ func _on_poll_summary(summary: Dictionary) -> void:
 		if is_instance_valid(popup):
 			popup.queue_free()
 	)
+
+
+func _on_multipliers(entries: Array) -> void:
+	if is_instance_valid(_boost_label):
+		_boost_label.queue_free()
+		_boost_label = null
+
+	# Filter to non-trivial multipliers (> 1.0)
+	var active: Array = entries.filter(func(e): return float((e as Dictionary).get("multiplier", 1.0)) > 1.001)
+	if active.is_empty():
+		return
+
+	var lines: PackedStringArray = []
+	for raw in active:
+		var e := raw as Dictionary
+		var src: String = str(e.get("source", "")).replace("_", " ").capitalize()
+		var mult: float = float(e.get("multiplier", 1.0))
+		var cat = e.get("category", null)
+		var suffix: String = " (%s)" % str(cat) if cat != null else ""
+		lines.append("🔆 %s%s: %.1f×" % [src, suffix, mult])
+
+	_boost_label = Label.new()
+	_boost_label.text = "\n".join(lines)
+	_boost_label.modulate = Color(0.6, 1.0, 0.8)
+	_boost_label.add_theme_font_size_override("font_size", 11)
+	$VBox.add_child(_boost_label)
+	$VBox.move_child(_boost_label, 4)
 
 
 func _on_active_events(entries: Array) -> void:
