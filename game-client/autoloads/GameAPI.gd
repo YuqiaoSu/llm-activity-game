@@ -74,6 +74,10 @@ signal luck_updated(data: Dictionary)
 signal bulk_sell_completed(data: Dictionary)
 signal notification_prefs_updated(entries: Array)
 signal notification_pref_patched(data: Dictionary)
+signal streak_freeze_updated(data: Dictionary)
+signal streak_freeze_bought(data: Dictionary)
+signal place_history_updated(entries: Array)
+signal player_data_exported(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -191,6 +195,44 @@ func upgrade_luck() -> void:
             fetch_profile()
         else:
             push_error("GameAPI: upgrade_luck → %d" % code)
+    )
+
+
+func fetch_streak_freeze() -> void:
+    _http_get("/player/streak-freeze", func(data) -> void:
+        if data is Dictionary:
+            streak_freeze_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/streak-freeze response is not a Dictionary")
+    )
+
+
+func buy_streak_freeze() -> void:
+    _http_post("/player/streak-freeze/buy", func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            streak_freeze_bought.emit(data)
+            fetch_streak_freeze()
+            fetch_profile()
+        else:
+            push_error("GameAPI: buy_streak_freeze → %d" % code)
+    )
+
+
+func fetch_place_history(place_id: String, limit: int = 20) -> void:
+    _http_get("/places/%s/history?limit=%d" % [place_id, limit], func(data) -> void:
+        if data is Array:
+            place_history_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: place_history response is not an Array")
+    )
+
+
+func export_player_data() -> void:
+    _http_get("/player/export", func(data) -> void:
+        if data is Dictionary:
+            player_data_exported.emit(data)
+        else:
+            push_error("GameAPI: /player/export response is not a Dictionary")
     )
 
 

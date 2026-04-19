@@ -345,6 +345,148 @@ def get_titles(request: Request) -> list[dict]:
     ]
 
 
+_FREEZE_BASE_COST = 100   # XP cost for first freeze; doubles per owned charge
+_FREEZE_MAX = 3
+
+
+@router.get("/streak-freeze")
+def get_streak_freeze(request: Request) -> dict:
+    """Return current streak freeze count and cost to buy the next charge."""
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT streak_freeze FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    count: int = int(row["streak_freeze"]) if row else 0
+    cost = _FREEZE_BASE_COST * (2 ** count)
+    return {
+        "freeze_count": count,
+        "max_freezes":  _FREEZE_MAX,
+        "cost_next":    cost,
+        "can_buy":      count < _FREEZE_MAX,
+    }
+
+
+@router.post("/streak-freeze/buy")
+def buy_streak_freeze(request: Request) -> dict:
+    """Spend XP to buy one streak freeze charge (max 3, cost doubles per owned).
+
+    Returns 402 if insufficient XP.
+    Returns 409 if already at max charges.
+    """
+    from services.progression.xp import get_total_xp, deduct_total_xp
+    db = request.app.state.db
+
+    row = db.execute(
+        "SELECT streak_freeze FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    count: int = int(row["streak_freeze"]) if row else 0
+
+    if count >= _FREEZE_MAX:
+        raise HTTPException(status_code=409, detail="Already at maximum streak freeze charges")
+
+    cost = _FREEZE_BASE_COST * (2 ** count)
+    total_xp = get_total_xp(db, "player_default")
+    if total_xp < cost:
+        raise HTTPException(status_code=402, detail=f"Insufficient XP: need {cost}, have {total_xp}")
+
+    deduct_total_xp(db, "player_default", cost)
+    db.execute(
+        "UPDATE streak_state SET streak_freeze = streak_freeze + 1 WHERE player_id='default'"
+    )
+    db.commit()
+
+    new_count = count + 1
+    new_cost = _FREEZE_BASE_COST * (2 ** new_count)
+    return {
+        "freeze_count": new_count,
+        "max_freezes":  _FREEZE_MAX,
+        "cost_next":    new_cost if new_count < _FREEZE_MAX else None,
+        "xp_spent":     cost,
+    }
+
+
+@router.get("/export")
+def export_player_data(request: Request) -> dict:
+    """Return the player's complete game state as a single JSON snapshot.
+
+    Covers: profile, inventory, achievements, places, skills, last 7 days of XP,
+    and the export timestamp. Read-only; no state is modified.
+    """
+    from datetime import datetime, timezone, timedelta
+    db = request.app.state.db
+
+    profile = get_player_profile(request)
+
+    inv_rows = db.execute(
+        """
+        SELECT i.instance_id, i.item_id, i.acquired_at, i.expires_at, i.note,
+               i.favorite, i.tags, i.placed_in,
+               json_extract(d.data, '$.name')   AS item_name,
+               json_extract(d.data, '$.rarity') AS rarity,
+               json_extract(d.data, '$.category') AS category
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id='player_default'
+        ORDER BY i.acquired_at DESC
+        """
+    ).fetchall()
+    inventory = [dict(r) for r in inv_rows]
+
+    ach_rows = db.execute(
+        """
+        SELECT a.achievement_id, a.name, a.description, a.condition_type, a.threshold,
+               pa.unlocked_at
+        FROM achievements a
+        LEFT JOIN player_achievements pa
+          ON pa.achievement_id = a.achievement_id AND pa.player_id = 'player_default'
+        ORDER BY pa.unlocked_at IS NULL ASC, pa.unlocked_at ASC
+        """
+    ).fetchall()
+    achievements = [
+        {**dict(r), "unlocked": r["unlocked_at"] is not None}
+        for r in ach_rows
+    ]
+
+    place_rows = db.execute(
+        "SELECT place_id, name, place_type, state, xp, level FROM places ORDER BY name ASC"
+    ).fetchall()
+    places = [dict(r) for r in place_rows]
+
+    skill_rows = db.execute(
+        """
+        SELECT s.skill_id, s.name, s.description, s.xp_cost,
+               ps.level AS player_level
+        FROM skills s
+        LEFT JOIN player_skills ps ON ps.skill_id = s.skill_id AND ps.player_id = 'player_default'
+        ORDER BY s.name ASC
+        """
+    ).fetchall()
+    skills = [dict(r) for r in skill_rows]
+
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).date().isoformat()
+    xp_rows = db.execute(
+        """
+        SELECT date(processed_at) AS day, SUM(xp_awarded) AS xp
+        FROM chunk_log
+        WHERE date(processed_at) > ?
+        GROUP BY day
+        ORDER BY day ASC
+        """,
+        (since,),
+    ).fetchall()
+    weekly_xp_7d = [{"day": r["day"], "xp": int(r["xp"])} for r in xp_rows]
+
+    return {
+        "profile":      profile,
+        "inventory":    inventory,
+        "achievements": achievements,
+        "places":       places,
+        "skills":       skills,
+        "weekly_xp_7d": weekly_xp_7d,
+        "export_at":    datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.post("/titles/{title_id}/equip")
 def equip_title(title_id: str, request: Request) -> dict:
     """Equip a title. Returns 404 if title_id unknown, 409 if not yet earned."""

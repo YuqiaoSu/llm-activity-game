@@ -16,7 +16,7 @@ def test_init_db_creates_all_tables():
         "collection_log", "daily_goals", "challenge_events", "place_perks",
         "trade_offers", "pinned_achievements", "wishlist",
         "skills", "player_skills", "player_settings",
-        "notification_prefs", "place_invest_log",
+        "notification_prefs", "place_invest_log", "place_activity_log",
     }
     assert expected == tables
     conn.close()

@@ -43,6 +43,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "inventory", "favorite", "INTEGER NOT NULL DEFAULT 0")
     # Per-instance tags (JSON array, max 3 tags each ≤12 chars, enforced at API layer)
     _safe_add_column(conn, "inventory", "tags", "TEXT NOT NULL DEFAULT '[]'")
+    # Streak freeze: purchased insurance charges that prevent one streak reset each
+    _safe_add_column(conn, "streak_state", "streak_freeze", "INTEGER NOT NULL DEFAULT 0")
     # Daily place XP investment cap tracking
     conn.execute(
         """
@@ -52,6 +54,20 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
             invest_date    TEXT NOT NULL,
             total_invested INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (player_id, place_id, invest_date)
+        )
+        """
+    )
+    conn.commit()
+    # Place activity log — records invest / donate / slot-assign events per place
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS place_activity_log (
+            log_id      TEXT NOT NULL PRIMARY KEY,
+            player_id   TEXT NOT NULL,
+            place_id    TEXT NOT NULL,
+            action      TEXT NOT NULL,
+            amount      INTEGER NOT NULL DEFAULT 0,
+            happened_at TEXT NOT NULL
         )
         """
     )

@@ -17,10 +17,29 @@ def _yesterday(d: date) -> date:
     return d - timedelta(days=1)
 
 
+def consume_streak_freeze(conn: sqlite3.Connection) -> bool:
+    """Consume one streak freeze charge if available.
+
+    Returns True and decrements streak_freeze when a charge was consumed.
+    Returns False when no charges remain.
+    Caller is responsible for commit.
+    """
+    row = conn.execute(
+        "SELECT streak_freeze FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    if row is None or int(row["streak_freeze"]) <= 0:
+        return False
+    conn.execute(
+        "UPDATE streak_state SET streak_freeze = streak_freeze - 1 WHERE player_id='default'"
+    )
+    return True
+
+
 def update_streak(conn: sqlite3.Connection, today: date) -> None:
     """Update streak_state for the default player based on `today`.
 
     Safe to call multiple times on the same date (idempotent after the first call).
+    When a gap is detected, a streak freeze charge is consumed instead of resetting.
     Caller is responsible for commit.
     """
     conn.execute(
@@ -41,7 +60,13 @@ def update_streak(conn: sqlite3.Connection, today: date) -> None:
     if last_str is not None and date.fromisoformat(last_str) == _yesterday(today):
         current += 1
     else:
-        current = 1  # gap or first ever — streak starts/resets
+        # Gap detected: try to consume a freeze charge before resetting
+        if last_str is not None and not consume_streak_freeze(conn):
+            current = 1  # no freeze available — streak resets
+        # if last_str is None it's first ever — streak starts at 1 below
+        elif last_str is None:
+            current = 1
+        # else: freeze consumed → keep current unchanged
 
     longest = max(longest, current)
     conn.execute(

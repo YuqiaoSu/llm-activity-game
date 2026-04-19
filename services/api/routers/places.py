@@ -1,13 +1,25 @@
 import json
 import uuid
 from datetime import datetime, timezone
-
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, Field
 from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
 from services.place_service.upgrade import award_place_xp
 from services.progression.xp import get_total_xp, deduct_total_xp
+
+_ACTIVITY_PLAYER = "player_default"
+
+
+def _log_place_activity(db, place_id: str, action: str, amount: int = 0) -> None:
+    """Append one row to place_activity_log. Caller is responsible for commit."""
+    db.execute(
+        "INSERT INTO place_activity_log (log_id, player_id, place_id, action, amount, happened_at)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
+        (str(uuid.uuid4()), _ACTIVITY_PLAYER, place_id, action, amount,
+         datetime.now(timezone.utc).isoformat()),
+    )
+
 
 _MIN_PLACE_LEVEL_FOR_DONATION = 5
 _DEFAULT_BOOST_FACTOR = 0.10   # 10% additive XP multiplier per donated item
@@ -132,6 +144,29 @@ def get_place_leaderboard(request: Request) -> list[dict]:
         }
         for idx, row in enumerate(rows)
     ]
+
+
+@router.get("/{place_id}/history")
+def get_place_history(
+    place_id: str,
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[dict]:
+    """Return recent activity events for a place (invest / donate / slot_assign), newest first.
+
+    Returns 404 if the place does not exist.
+    """
+    db = request.app.state.db
+    if db.execute("SELECT 1 FROM places WHERE place_id=?", (place_id,)).fetchone() is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    rows = db.execute(
+        "SELECT action, amount, happened_at FROM place_activity_log"
+        " WHERE player_id=? AND place_id=?"
+        " ORDER BY happened_at DESC LIMIT ?",
+        (_ACTIVITY_PLAYER, place_id, limit),
+    ).fetchall()
+    return [{"action": r["action"], "amount": r["amount"], "happened_at": r["happened_at"]}
+            for r in rows]
 
 
 @router.get("")
@@ -290,6 +325,7 @@ def invest_xp(place_id: str, body: InvestBody, request: Request) -> dict:
         """,
         (_INVEST_PLAYER, place_id, today, body.xp),
     )
+    _log_place_activity(db, place_id, "invest", body.xp)
     db.commit()
 
     invested_today += body.xp
@@ -372,6 +408,7 @@ def donate_item(place_id: str, body: DonateBody, request: Request) -> dict:
         "VALUES (?, ?, ?, ?, ?, ?)",
         (perk_id, place_id, item_id, body.instance_id, _DEFAULT_BOOST_FACTOR, now),
     )
+    _log_place_activity(db, place_id, "donate")
     db.commit()
 
     item_row = db.execute(

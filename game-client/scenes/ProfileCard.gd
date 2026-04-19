@@ -145,6 +145,9 @@ func _ready() -> void:
 		luck_upgrade_btn.disabled = not can_up
 	)
 
+	GameAPI.streak_freeze_updated.connect(_on_streak_freeze)
+	GameAPI.streak_freeze_bought.connect(func(_d: Dictionary) -> void: GameAPI.fetch_streak_freeze())
+
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
@@ -153,6 +156,7 @@ func _ready() -> void:
 	GameAPI.fetch_xp_projection()
 	GameAPI.fetch_player_settings()
 	GameAPI.fetch_luck()
+	GameAPI.fetch_streak_freeze()
 
 
 func _exit_tree() -> void:
@@ -536,6 +540,33 @@ func _on_titles(entries: Array) -> void:
 		hbox.add_child(check)
 		hbox.add_child(lbl)
 		_titles_container.add_child(hbox)
+
+
+func _on_streak_freeze(data: Dictionary) -> void:
+	if _titles_container == null:
+		return
+	var fid := "streak_freeze_row"
+	for child in _titles_container.get_children():
+		if child.name == fid:
+			child.queue_free()
+	var count: int = data.get("freeze_count", 0) as int
+	var cost: int  = data.get("cost_next", 0) as int
+	var can_buy: bool = data.get("can_buy", false)
+
+	var row := HBoxContainer.new()
+	row.name = fid
+	var lbl := Label.new()
+	lbl.text = "🛡 Streak freeze: %d / 3  (next costs %d XP)" % [count, cost]
+	lbl.modulate = Color(0.60, 0.85, 1.00)
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(lbl)
+	var buy_btn := Button.new()
+	buy_btn.text = "Buy"
+	buy_btn.disabled = not can_buy
+	buy_btn.pressed.connect(GameAPI.buy_streak_freeze)
+	row.add_child(buy_btn)
+	_titles_container.add_child(row)
 
 
 func _short_date(iso: String) -> String:
