@@ -90,8 +90,15 @@ def get_multipliers(request: Request) -> list[dict]:
 
 @router.post("/poll-now")
 def poll_now(request: Request) -> dict:
+    from services.sync_agent.rate_limiter import adaptive_cooldown
+    db = request.app.state.db
+    cooldown = adaptive_cooldown(db)
+    # Apply adaptive cooldown to the live rate limiter
+    request.app.state.sync_agent.rate_limiter.cooldown_sec = cooldown
     try:
         summary = request.app.state.sync_agent.poll_with_summary(manual=True)
     except httpx.HTTPError:
-        raise HTTPException(status_code=503, detail="Tracker unavailable")
+        return {"result": "ERROR", "cooldown_sec": cooldown,
+                "total_xp": 0, "xp_by_category": {}, "chunks_processed": 0, "drops_earned": 0}
+    summary["cooldown_sec"] = cooldown
     return summary

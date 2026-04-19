@@ -43,6 +43,11 @@ func _ready() -> void:
 	GameAPI.profile_updated.connect(_on_profile)
 	GameAPI.poll_completed.connect(_on_poll_result)
 	GameAPI.poll_summary_ready.connect(_on_poll_summary)
+	GameAPI.poll_cooldown_updated.connect(func(sec: int) -> void:
+		_poll_button.text = "Check Rewards (%ds)" % sec
+		var timer := get_tree().create_timer(float(sec))
+		timer.timeout.connect(func() -> void: _poll_button.text = "Check Rewards")
+	)
 	_poll_button.pressed.connect(_on_poll_pressed)
 	$VBox/Buttons/InventoryButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Inventory.tscn")

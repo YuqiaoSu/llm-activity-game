@@ -85,6 +85,7 @@ signal inventory_lock_toggled(data: Dictionary)
 signal bulk_repair_completed(data: Dictionary)
 signal season_updated(data: Dictionary)
 signal item_gifted(data: Dictionary)
+signal poll_cooldown_updated(sec: int)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -920,6 +921,8 @@ func patch_notification_pref(event_type: String, muted: bool) -> void:
 
 func poll_now() -> void:
 	_http_post("/sync/poll-now", func(code: int, data: Dictionary) -> void:
+		if data.has("cooldown_sec"):
+			poll_cooldown_updated.emit(int(data.get("cooldown_sec", 60)))
 		match code:
 			200:
 				var result: String = data.get("result", "UNKNOWN")
