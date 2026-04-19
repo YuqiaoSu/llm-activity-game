@@ -124,11 +124,15 @@ def insert_place_unlock_notification(
     character_id: str,
     place_id: str,
     place_name: str,
+    description: str = "",
+    condition: str = "",
 ) -> None:
     """Insert a place_unlock pending_notification. Caller is responsible for commit."""
     _insert_notification(conn, character_id, "place_unlock", {
-        "place_id": place_id,
-        "place_name": place_name,
+        "place_id":    place_id,
+        "place_name":  place_name,
+        "description": description,
+        "condition":   condition,
     })
 
 

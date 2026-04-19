@@ -168,8 +168,20 @@ class SyncAgent:
                     "UPDATE places SET state='UNLOCKED' WHERE place_id=?",
                     (place.place_id,),
                 )
+                cond_str = ""
+                if place.unlock_condition is not None:
+                    cond_type = place.unlock_condition.condition_type
+                    params = place.unlock_condition.params
+                    if cond_type == "min_level":
+                        cond_str = "Reached level %s" % params.get("level", "?")
+                    elif cond_type == "min_streak":
+                        cond_str = "%s-day streak reached" % params.get("days", "?")
+                    else:
+                        cond_str = cond_type
                 insert_place_unlock_notification(
-                    self.db, self.character_id, place.place_id, place.name
+                    self.db, self.character_id, place.place_id, place.name,
+                    description=place.description,
+                    condition=cond_str,
                 )
                 newly_unlocked = True
         if newly_unlocked:

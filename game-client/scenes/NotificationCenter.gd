@@ -160,7 +160,9 @@ func _entry_summary(entry: Dictionary) -> String:
 		"level_up":
 			return "Reached level %d" % payload.get("new_level", "?")
 		"place_unlock":
-			return str(payload.get("place_name", "New place"))
+			var pname: String = str(payload.get("place_name", "New place"))
+			var cond: String  = str(payload.get("condition", ""))
+			return pname + (" · " + cond if not cond.is_empty() else "")
 		"place_level_up":
 			var pname: String = payload.get("place_name", "Place")
 			var lvl = payload.get("new_level", "?")
