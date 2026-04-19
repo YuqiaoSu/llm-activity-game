@@ -26,6 +26,7 @@ var _daily_xp_target: int = 100
 var _today_xp: int = 0
 var _luck_row: HBoxContainer = null
 var _luck_label: Label = null
+var _season_badge: Label = null
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -145,6 +146,27 @@ func _ready() -> void:
 		luck_upgrade_btn.disabled = not can_up
 	)
 
+	# Season tier badge: below luck row
+	_season_badge = Label.new()
+	_season_badge.add_theme_font_size_override("font_size", 11)
+	_season_badge.text = "Season: …"
+	$VBox.add_child(_season_badge)
+	$VBox.move_child(_season_badge, _luck_row.get_index() + 1)
+	GameAPI.season_updated.connect(func(d: Dictionary) -> void:
+		var tier: String = d.get("tier", "BRONZE")
+		var xp: int = d.get("season_xp", 0) as int
+		var days: int = d.get("days_remaining", 0) as int
+		var next = d.get("next_tier_at", null)
+		var icon := "🥉" if tier == "BRONZE" else ("🥈" if tier == "SILVER" else "🥇")
+		var col := Color(0.72, 0.45, 0.20) if tier == "BRONZE" \
+			else (Color(0.70, 0.70, 0.75) if tier == "SILVER" else Color(1.00, 0.84, 0.00))
+		var suffix := ""
+		if next != null:
+			suffix = " · %d XP to %s" % [(next as int) - xp, ("SILVER" if tier == "BRONZE" else "GOLD")]
+		_season_badge.text = "%s %s — %d XP this month  (%d day(s) left)%s" % [icon, tier, xp, days, suffix]
+		_season_badge.modulate = col
+	)
+
 	GameAPI.streak_freeze_updated.connect(_on_streak_freeze)
 	GameAPI.streak_freeze_bought.connect(func(_d: Dictionary) -> void: GameAPI.fetch_streak_freeze())
 
@@ -181,6 +203,7 @@ func _ready() -> void:
 	GameAPI.fetch_luck()
 	GameAPI.fetch_streak_freeze()
 	GameAPI.fetch_daily_tip()
+	GameAPI.fetch_season()
 
 
 func _exit_tree() -> void:

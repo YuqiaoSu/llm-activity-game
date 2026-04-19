@@ -83,6 +83,7 @@ signal place_upgrade_preview_updated(data: Dictionary)
 signal daily_tip_updated(data: Dictionary)
 signal inventory_lock_toggled(data: Dictionary)
 signal bulk_repair_completed(data: Dictionary)
+signal season_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -334,6 +335,15 @@ func fetch_daily_tip() -> void:
             daily_tip_updated.emit(data)
         else:
             push_error("GameAPI: /player/daily-tip response not a Dictionary")
+    )
+
+
+func fetch_season() -> void:
+    _http_get("/player/season", func(data) -> void:
+        if data is Dictionary:
+            season_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/season response not a Dictionary")
     )
 
 

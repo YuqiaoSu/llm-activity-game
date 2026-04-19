@@ -524,38 +524,57 @@ def export_player_data(request: Request) -> dict:
     }
 
 
-_TIPS: list[str] = [
-    "Your XP decay pauses if you log 10+ minutes of activity daily!",
-    "Fuse 3 items of the same rarity to get one of the next tier.",
-    "Donating items to a Level 5+ place grants a permanent 10% XP boost there.",
-    "The Combo Bonus fires when you log ≥ 3 different categories in one session.",
-    "Streak freezes cost 100 XP each and prevent one missed-day reset.",
-    "Higher luck increases your chance of getting RARE and EPIC drops.",
-    "Invest XP into a place to level it up and unlock better drop modifiers.",
-    "Achievements come in chains — unlock the first to reveal the next.",
-    "Timed challenge events add a multiplier to matching-category XP.",
-    "Equip a title on your Profile Card to show off your achievements.",
-    "The activity heatmap shows your 12-week intensity at a glance.",
-    "Place upgrade previews let you see level-up impact before investing.",
-    "Daily goals scale in difficulty as your goal streak grows.",
-    "Sell unwanted items for XP — LEGENDARY items net 100 XP each.",
-    "The recipe browser shows every craft path from COMMON to LEGENDARY.",
-    "Passive skills can unlock extra roll chances on every poll.",
-    "A Focus Streak builds when you log WORK or LEARN chunks every day.",
-    "Wishlisted items get a ★ highlight when they drop in a poll.",
-    "Check the challenge leaderboard to see where you rank against rivals.",
-    "The activity calendar gives a colour-coded view of your productivity.",
+_SEASON_TIERS = [
+    ("GOLD",   2000),
+    ("SILVER", 500),
+    ("BRONZE", 0),
 ]
 
 
-@router.get("/daily-tip")
-def get_daily_tip() -> dict:
-    """Return today's motivational tip — deterministic for the full UTC day."""
-    import hashlib
-    from datetime import datetime, timezone
-    today = datetime.now(timezone.utc).date().isoformat()
-    idx = int(hashlib.md5(today.encode()).hexdigest(), 16) % len(_TIPS)
-    return {"tip": _TIPS[idx], "tip_index": idx}
+@router.get("/season")
+def get_season(request: Request) -> dict:
+    """Return the player's XP tier for the current calendar month.
+
+    season_xp — total XP earned this month (from chunk_log).
+    tier       — BRONZE / SILVER / GOLD based on thresholds.
+    next_tier_at — XP needed to reach next tier (null when already GOLD).
+    days_remaining — calendar days left in the current month.
+    """
+    from calendar import monthrange
+    db = request.app.state.db
+    today = date.today()
+    ym = today.strftime("%Y-%m")
+
+    row = db.execute(
+        "SELECT COALESCE(SUM(xp_awarded), 0) AS total FROM chunk_log"
+        " WHERE strftime('%Y-%m', processed_at) = ?",
+        (ym,),
+    ).fetchone()
+    season_xp: int = int(row["total"]) if row else 0
+
+    tier = "BRONZE"
+    next_tier_at: int | None = None
+    for name, threshold in _SEASON_TIERS:
+        if season_xp >= threshold:
+            tier = name
+            break
+
+    tier_thresholds = {name: t for name, t in _SEASON_TIERS}
+    if tier == "BRONZE":
+        next_tier_at = tier_thresholds["SILVER"]
+    elif tier == "SILVER":
+        next_tier_at = tier_thresholds["GOLD"]
+
+    _, days_in_month = monthrange(today.year, today.month)
+    days_remaining = days_in_month - today.day + 1
+
+    return {
+        "season_xp":       season_xp,
+        "tier":            tier,
+        "next_tier_at":    next_tier_at,
+        "days_remaining":  days_remaining,
+        "month":           ym,
+    }
 
 
 @router.post("/titles/{title_id}/equip")
