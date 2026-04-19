@@ -185,13 +185,16 @@ def claim_challenge(challenge_id: str, request: Request) -> dict:
         """,
         (challenge_id, week_start),
     )
+    streak_info = _update_challenge_streak(db, week_start)
     db.commit()
 
     return {
-        "challenge_id":  challenge_id,
-        "xp_awarded":    xp_awarded,
-        "category":      cat.value,
-        "daily_bonus":   is_daily_bonus,
+        "challenge_id":      challenge_id,
+        "xp_awarded":        xp_awarded,
+        "category":          cat.value,
+        "daily_bonus":       is_daily_bonus,
+        "challenge_streak":  streak_info["current_streak"],
+        "streak_bonus_item": streak_info["bonus_item"],
     }
 
 
@@ -376,4 +379,96 @@ def get_challenge_leaderboard(
         "your_rank":     your_rank,
         "total_entries": 1 + len(ghosts),
         "ghosts":        ghosts,
+    }
+
+
+_STREAK_MILESTONES = [3, 5, 10]
+_MILESTONE_RARITY  = {3: "RARE", 5: "EPIC", 10: "LEGENDARY"}
+
+
+def _update_challenge_streak(db, week_start: str) -> dict:
+    """Increment or reset the weekly challenge streak after a successful claim.
+
+    Returns the updated streak state dict.
+    """
+    row = db.execute(
+        "SELECT challenge_weekly_streak, challenge_longest_streak, last_challenge_week"
+        " FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    current  = int(row["challenge_weekly_streak"])  if row else 0
+    longest  = int(row["challenge_longest_streak"]) if row else 0
+    last_wk  = str(row["last_challenge_week"]) if row and row["last_challenge_week"] else ""
+
+    # week_start is YYYY-MM-DD (Monday); previous week's Monday is 7 days earlier
+    from datetime import timedelta
+    ws_date   = date.fromisoformat(week_start)
+    prev_week = (ws_date - timedelta(weeks=1)).isoformat()
+    this_week = ws_date.isoformat()
+
+    if last_wk == this_week:
+        # Already counted this week (second claim same week) — no change
+        return {"current_streak": current, "longest_streak": longest,
+                "last_challenge_week": last_wk, "bonus_item": None}
+
+    new_streak = current + 1 if last_wk == prev_week else 1
+    new_longest = max(longest, new_streak)
+
+    db.execute(
+        "UPDATE streak_state SET challenge_weekly_streak=?, challenge_longest_streak=?,"
+        " last_challenge_week=? WHERE player_id='default'",
+        (new_streak, new_longest, this_week),
+    )
+
+    # Milestone bonus item — insert a random item of the milestone rarity
+    bonus_item = None
+    if new_streak in _STREAK_MILESTONES:
+        import uuid as _uuid
+        from datetime import datetime as _dt, timezone as _tz
+        rarity = _MILESTONE_RARITY[new_streak]
+        chunk_id = f"challenge_streak_{new_streak}"
+        already = db.execute(
+            "SELECT 1 FROM reward_ledger WHERE chunk_id=? AND roll_n=0", (chunk_id,)
+        ).fetchone()
+        if not already:
+            item_row = db.execute(
+                "SELECT item_id FROM item_definitions"
+                " WHERE json_extract(data, '$.rarity') = ? ORDER BY RANDOM() LIMIT 1",
+                (rarity,),
+            ).fetchone()
+            if item_row:
+                now_ts = _dt.now(_tz.utc).isoformat()
+                ledger_id = str(_uuid.uuid4())
+                instance_id = str(_uuid.uuid4())
+                bonus_item = item_row["item_id"]
+                db.execute(
+                    "INSERT INTO reward_ledger (ledger_id, chunk_id, roll_n, item_id, character_id, awarded_at)"
+                    " VALUES (?, ?, 0, ?, 'player_default', ?)",
+                    (ledger_id, chunk_id, bonus_item, now_ts),
+                )
+                db.execute(
+                    "INSERT INTO inventory (instance_id, character_id, item_id, acquired_at, source_chunk)"
+                    " VALUES (?, 'player_default', ?, ?, ?)",
+                    (instance_id, bonus_item, now_ts, chunk_id),
+                )
+
+    return {"current_streak": new_streak, "longest_streak": new_longest,
+            "last_challenge_week": this_week, "bonus_item": bonus_item}
+
+
+@router.get("/streak")
+def get_challenge_streak(request: Request) -> dict:
+    """Return the player's weekly challenge completion streak."""
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT challenge_weekly_streak, challenge_longest_streak, last_challenge_week"
+        " FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    current = int(row["challenge_weekly_streak"])  if row else 0
+    longest = int(row["challenge_longest_streak"]) if row else 0
+    # Next milestone at or above current
+    next_milestone = next((m for m in sorted(_STREAK_MILESTONES) if m > current), None)
+    return {
+        "current_streak":  current,
+        "longest_streak":  longest,
+        "next_milestone_at": next_milestone,
     }

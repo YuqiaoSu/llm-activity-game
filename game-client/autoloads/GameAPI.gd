@@ -86,6 +86,7 @@ signal bulk_repair_completed(data: Dictionary)
 signal season_updated(data: Dictionary)
 signal item_gifted(data: Dictionary)
 signal poll_cooldown_updated(sec: int)
+signal challenge_streak_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -566,8 +567,18 @@ func claim_challenge(challenge_id: String) -> void:
 	_http_post("/challenges/%s/claim" % challenge_id, func(code: int, data: Dictionary) -> void:
 		if code == 200:
 			challenge_claimed.emit(true, challenge_id, data.get("xp_awarded", 0))
+			fetch_challenge_streak()
 		else:
 			challenge_claimed.emit(false, challenge_id, 0)
+	)
+
+
+func fetch_challenge_streak() -> void:
+	_http_get("/challenges/streak", func(data) -> void:
+		if data is Dictionary:
+			challenge_streak_updated.emit(data)
+		else:
+			push_error("GameAPI: /challenges/streak not a Dictionary")
 	)
 
 

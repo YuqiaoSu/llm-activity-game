@@ -28,9 +28,11 @@ func _ready() -> void:
 	GameAPI.challenge_claimed.connect(_on_claim_result)
 	GameAPI.challenge_rerolled.connect(_on_reroll_result)
 	GameAPI.daily_bonus_updated.connect(_on_daily_bonus)
+	GameAPI.challenge_streak_updated.connect(_on_streak)
 	# Fetch daily bonus first; _on_daily_bonus then triggers fetch_challenges
 	# so challenge rows are always built with the bonus ID already known.
 	GameAPI.fetch_daily_bonus()
+	GameAPI.fetch_challenge_streak()
 
 
 func _exit_tree() -> void:
@@ -47,6 +49,29 @@ func _exit_tree() -> void:
 func _on_daily_bonus(data: Dictionary) -> void:
 	_daily_bonus_id = data.get("challenge_id", "")
 	GameAPI.fetch_challenges()
+
+
+func _on_streak(data: Dictionary) -> void:
+	var streak: int = data.get("current_streak", 0) as int
+	var next = data.get("next_milestone_at", null)
+	var bid := "challenge_streak_badge"
+	# Remove stale badge
+	for child in $VBox.get_children():
+		if child.name == bid:
+			child.queue_free()
+	if streak <= 0:
+		return
+	var badge := Label.new()
+	badge.name = bid
+	var suffix := ""
+	if next != null:
+		suffix = " · milestone at %d" % (next as int)
+	badge.text = "🔥 %d-week challenge streak%s" % [streak, suffix]
+	badge.modulate = Color(1.0, 0.65, 0.15)
+	badge.add_theme_font_size_override("font_size", 11)
+	# Insert below count label
+	$VBox.add_child(badge)
+	$VBox.move_child(badge, _count_label.get_index() + 1)
 
 
 func _on_challenges(entries: Array) -> void:
