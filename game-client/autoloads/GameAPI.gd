@@ -67,6 +67,8 @@ signal calendar_updated(entries: Array)
 signal player_settings_updated(data: Dictionary)
 signal skill_upgraded(data: Dictionary)
 signal inventory_note_saved(data: Dictionary)
+signal notification_count_updated(count: int)
+signal inventory_favorite_toggled(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -165,6 +167,26 @@ func patch_player_settings(xp_target: int) -> void:
             player_settings_updated.emit(data)
         else:
             push_error("GameAPI: patch_player_settings → %d" % code)
+    )
+
+
+func toggle_inventory_favorite(instance_id: String, favorite: bool) -> void:
+    var body := JSON.stringify({"favorite": favorite})
+    _http_patch("/inventory/instances/%s/favorite" % instance_id, body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            inventory_favorite_toggled.emit(data)
+            fetch_inventory()
+        else:
+            push_error("GameAPI: toggle_inventory_favorite %s → %d" % [instance_id, code])
+    )
+
+
+func fetch_notification_count() -> void:
+    _http_get("/notifications/count", func(data) -> void:
+        if data is Dictionary:
+            notification_count_updated.emit(int(data.get("unread", 0)))
+        else:
+            push_error("GameAPI: /notifications/count response is not a Dictionary")
     )
 
 

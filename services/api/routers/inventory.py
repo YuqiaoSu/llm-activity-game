@@ -62,6 +62,7 @@ def get_inventory(request: Request) -> list[dict]:
                           AND i.expires_at > datetime('now')
                      THEN i.expires_at END)        AS expires_at,
             MAX(i.note)                            AS note,
+            MAX(i.favorite)                        AS favorite,
             json_extract(d.data, '$.name')         AS name,
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
@@ -110,6 +111,32 @@ def discard_item(instance_id: str, request: Request) -> dict:
     db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
     db.commit()
     return {"deleted": True, "instance_id": instance_id}
+
+
+class FavoriteRequest(BaseModel):
+    favorite: bool
+
+
+@router.patch("/instances/{instance_id}/favorite")
+def patch_inventory_favorite(instance_id: str, body: FavoriteRequest, request: Request) -> dict:
+    """Toggle the favorite flag on a specific inventory instance.
+
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    """
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT instance_id FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+
+    db.execute(
+        "UPDATE inventory SET favorite=? WHERE instance_id=?",
+        (1 if body.favorite else 0, instance_id),
+    )
+    db.commit()
+    return {"instance_id": instance_id, "favorite": body.favorite}
 
 
 @router.patch("/instances/{instance_id}/note")

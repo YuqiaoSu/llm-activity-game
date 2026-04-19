@@ -10,8 +10,9 @@ extends Control
 @onready var _poll_button: Button             = $VBox/Buttons/PollButton
 
 var _is_polling: bool = false
-var _event_badge: Label = null   # created lazily on first active event
-var _boost_label: Label = null   # created lazily when multipliers are active
+var _event_badge: Label = null    # created lazily on first active event
+var _boost_label: Label = null    # created lazily when multipliers are active
+var _inbox_badge: Label = null    # red unread count overlay on InboxButton
 
 # Cached dormancy state so Welcome Back overlay can reference pre-poll profile
 var _was_dormant: bool = false
@@ -117,10 +118,12 @@ func _ready() -> void:
 	)
 	GameAPI.active_events_updated.connect(_on_active_events)
 	GameAPI.multipliers_updated.connect(_on_multipliers)
+	GameAPI.notification_count_updated.connect(_on_notification_count)
 	$AutoPollTimer.timeout.connect(_on_auto_poll_timeout)
 	GameAPI.fetch_profile()
 	GameAPI.fetch_active_events()
 	GameAPI.fetch_multipliers()
+	GameAPI.fetch_notification_count()
 
 
 func _exit_tree() -> void:
@@ -134,6 +137,8 @@ func _exit_tree() -> void:
 		GameAPI.active_events_updated.disconnect(_on_active_events)
 	if GameAPI.multipliers_updated.is_connected(_on_multipliers):
 		GameAPI.multipliers_updated.disconnect(_on_multipliers)
+	if GameAPI.notification_count_updated.is_connected(_on_notification_count):
+		GameAPI.notification_count_updated.disconnect(_on_notification_count)
 
 
 func _on_profile(data: Dictionary) -> void:
@@ -236,6 +241,7 @@ func _on_poll_result(result: String) -> void:
 			_poll_status.text = "Rewards processed!"
 			GameAPI.fetch_profile()
 			GameAPI.fetch_multipliers()
+			GameAPI.fetch_notification_count()
 		"NO_NEW_CHUNKS":
 			_poll_status.text = "No new activity"
 		"ON_COOLDOWN":
@@ -338,6 +344,22 @@ func _on_multipliers(entries: Array) -> void:
 	_boost_label.add_theme_font_size_override("font_size", 11)
 	$VBox.add_child(_boost_label)
 	$VBox.move_child(_boost_label, 4)
+
+
+func _on_notification_count(count: int) -> void:
+    var inbox_btn: Button = $VBox/Buttons/InboxButton
+    if count > 0:
+        if not is_instance_valid(_inbox_badge):
+            _inbox_badge = Label.new()
+            _inbox_badge.modulate = Color(1.0, 0.25, 0.25)
+            _inbox_badge.add_theme_font_size_override("font_size", 10)
+            _inbox_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            inbox_btn.add_child(_inbox_badge)
+        _inbox_badge.text = " %d" % count
+    else:
+        if is_instance_valid(_inbox_badge):
+            _inbox_badge.queue_free()
+            _inbox_badge = null
 
 
 func _on_active_events(entries: Array) -> void:

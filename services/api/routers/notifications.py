@@ -5,6 +5,17 @@ from services.reward_ledger.ledger import get_pending_notifications
 router = APIRouter()
 
 
+@router.get("/count")
+def get_notification_count(request: Request) -> dict:
+    """Return the count of unread (unacknowledged) notifications."""
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT COUNT(*) AS n FROM pending_notifications"
+        " WHERE character_id='player_default' AND acknowledged=0"
+    ).fetchone()
+    return {"unread": row["n"] if row else 0}
+
+
 @router.get("/pending")
 def get_pending(request: Request) -> list[dict]:
     db = request.app.state.db

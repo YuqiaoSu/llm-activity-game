@@ -38,7 +38,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "skills",        "max_level", "INTEGER NOT NULL DEFAULT 3")
     _safe_add_column(conn, "player_skills", "level",     "INTEGER NOT NULL DEFAULT 1")
     # Per-instance player notes (freeform, max 50 chars enforced at API layer)
-    _safe_add_column(conn, "inventory", "note", "TEXT")
+    _safe_add_column(conn, "inventory", "note",     "TEXT")
+    # Per-instance favorite flag
+    _safe_add_column(conn, "inventory", "favorite", "INTEGER NOT NULL DEFAULT 0")
 
 
 def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

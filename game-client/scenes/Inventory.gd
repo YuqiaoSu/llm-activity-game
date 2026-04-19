@@ -23,6 +23,7 @@ const _RARITY_ORDER := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 var _filter_category: String = ""    # "" = all
 var _filter_rarity: String   = ""    # "" = all
 var _filter_search: String   = ""    # "" = all; substring match on name/item_id
+var _filter_favorites: bool  = false # true = show only favorited items
 var _sort_mode: String       = "name"  # "name" | "rarity" | "quantity"
 
 # Filter/sort row (created once in _ready)
@@ -235,6 +236,17 @@ func _make_filter_row() -> HBoxContainer:
 	)
 	row.add_child(sort_opt)
 
+	var fav_btn := Button.new()
+	fav_btn.text = "★ Only"
+	fav_btn.add_theme_font_size_override("font_size", 11)
+	fav_btn.modulate = Color(0.75, 0.75, 0.75)
+	fav_btn.pressed.connect(func() -> void:
+		_filter_favorites = not _filter_favorites
+		fav_btn.modulate = Color(1.0, 0.85, 0.1) if _filter_favorites else Color(0.75, 0.75, 0.75)
+		_rebuild_list(_items_cache)
+	)
+	row.add_child(fav_btn)
+
 	return row
 
 
@@ -252,6 +264,8 @@ func _apply_filter_sort(items: Array) -> Array:
 			var name_lower: String = str(item.get("name", item.get("item_id", ""))).to_lower()
 			if not name_lower.contains(_filter_search):
 				continue
+		if _filter_favorites and not bool(item.get("favorite", false)):
+			continue
 		result.append(item)
 
 	match _sort_mode:
@@ -541,6 +555,21 @@ func _make_card(item: Dictionary) -> Control:
 		_select_for_compare(cmp_snapshot)
 	)
 	hbox.add_child(cmp_btn)
+
+	# Favorite toggle button
+	var is_fav: bool = bool(item.get("favorite", false))
+	var fav_btn := Button.new()
+	fav_btn.text = "★" if is_fav else "☆"
+	fav_btn.modulate = Color(1.0, 0.85, 0.1) if is_fav else Color(0.65, 0.65, 0.65)
+	fav_btn.add_theme_font_size_override("font_size", 12)
+	var fav_iid: String = str(item.get("available_instance_id", ""))
+	if fav_iid != "":
+		fav_btn.pressed.connect(func() -> void:
+			GameAPI.toggle_inventory_favorite(fav_iid, not is_fav)
+		)
+	else:
+		fav_btn.disabled = true
+	hbox.add_child(fav_btn)
 
 	vbox.add_child(hbox)
 
