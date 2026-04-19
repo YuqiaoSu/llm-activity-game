@@ -79,6 +79,7 @@ signal streak_freeze_bought(data: Dictionary)
 signal place_history_updated(entries: Array)
 signal player_data_exported(data: Dictionary)
 signal item_repaired(data: Dictionary)
+signal place_upgrade_preview_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -286,6 +287,15 @@ func repair_item(instance_id: String) -> void:
             fetch_profile()  # XP changed
         else:
             push_error("GameAPI: repair_item %s → %d" % [instance_id, code])
+    )
+
+
+func fetch_place_upgrade_preview(place_id: String, xp: int) -> void:
+    _http_get("/places/%s/upgrade-preview?xp=%d" % [place_id, xp], func(data) -> void:
+        if data is Dictionary:
+            place_upgrade_preview_updated.emit(data)
+        else:
+            push_error("GameAPI: /places/%s/upgrade-preview response not a Dictionary" % place_id)
     )
 
 

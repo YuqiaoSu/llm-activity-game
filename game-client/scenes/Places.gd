@@ -253,6 +253,27 @@ func _make_card(place: Dictionary) -> Control:
 		invest_row.add_child(cap_lbl)
 		vbox.add_child(invest_row)
 
+		# Preview label updated when SpinBox value changes
+		var preview_lbl := Label.new()
+		preview_lbl.add_theme_font_size_override("font_size", 10)
+		preview_lbl.modulate = Color(0.7, 0.9, 1.0)
+		vbox.add_child(preview_lbl)
+		var _prev_pid := pid
+		GameAPI.place_upgrade_preview_updated.connect(func(d: Dictionary) -> void:
+			if d.get("place_id", "") != _prev_pid:
+				return
+			if d.get("would_level_up", false):
+				preview_lbl.text = "  → Lv.%d (level up!)" % d.get("projected_level", 0)
+			else:
+				preview_lbl.text = "  +%d XP → %d to next level" % [
+					d.get("projected_xp", 0) - d.get("current_xp", 0),
+					d.get("xp_to_next", 0),
+				]
+		)
+		spin.value_changed.connect(func(v: float) -> void:
+			GameAPI.fetch_place_upgrade_preview(_prev_pid, int(v))
+		)
+
 	# ── donated perks (only for unlocked places that have received donations) ──
 	if unlocked:
 		var perks: Array = place.get("perks", [])
