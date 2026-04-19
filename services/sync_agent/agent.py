@@ -23,6 +23,7 @@ from services.progression.weekly_challenges import update_weekly_progress
 from services.progression.daily_goals import ensure_daily_goals, update_daily_goal_progress, check_goal_streak_reward
 from services.notifications.desktop import notify_level_up
 from services.progression.milestones import check_streak_milestone_drop
+from services.progression.xp_milestones import check_xp_milestones
 from services.place_service.upgrade import award_place_xp, get_active_place_ids
 from services.progression.decay import (
     apply_daily_decay,
@@ -247,12 +248,15 @@ class SyncAgent:
             event_mult = event_mults.get(cat.value.upper(), 1.0) * event_mults.get("ALL", 1.0)
             xp = max(1, int(xp_for_chunk(chunk) * xp_multiplier * cat_bonus * event_mult))
             xp_earned_this_poll[cat.value] = xp_earned_this_poll.get(cat.value, 0) + xp
+            xp_before_chunk = get_total_xp(self.db, self.character_id)
             award_category_xp(
                 self.db,
                 character_id=self.character_id,
                 category=cat,
                 xp=xp,
             )
+            xp_after_chunk = get_total_xp(self.db, self.character_id)
+            check_xp_milestones(self.db, self.character_id, xp_before_chunk, xp_after_chunk)
             self.db.execute(
                 """
                 INSERT OR IGNORE INTO chunk_log

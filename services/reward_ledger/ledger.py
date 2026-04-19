@@ -160,6 +160,21 @@ def insert_challenge_progress_notification(
     })
 
 
+def insert_xp_milestone_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    milestone: int,
+    rarity: str,
+    item_name: str,
+) -> None:
+    """Insert an xp_milestone pending_notification. Caller is responsible for commit."""
+    _insert_notification(conn, character_id, "xp_milestone", {
+        "milestone": milestone,
+        "rarity":    rarity,
+        "item_name": item_name,
+    })
+
+
 def insert_daily_goal_hit_notification(
     conn: sqlite3.Connection,
     character_id: str,
