@@ -235,6 +235,18 @@ func patch_inventory_note(instance_id: String, note: String) -> void:
     )
 
 
+signal inventory_tags_saved(data: Dictionary)
+
+func patch_inventory_tags(instance_id: String, tags: Array) -> void:
+	var body := JSON.stringify({"tags": tags})
+	_http_patch("/inventory/instances/%s/tags" % instance_id, body, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			inventory_tags_saved.emit(data)
+		else:
+			push_error("GameAPI: patch_inventory_tags %s → %d" % [instance_id, code])
+	)
+
+
 func rename_player(name: String) -> void:
     var body := JSON.stringify({"name": name})
     _http_patch("/player/profile", body, func(code: int, data: Dictionary) -> void:

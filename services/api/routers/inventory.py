@@ -3,7 +3,7 @@ import random
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from services.drop_engine.lottery import DEFAULT_RARITY_WEIGHTS
 from services.models.enums import Category
 
@@ -72,6 +72,7 @@ def get_inventory(request: Request) -> list[dict]:
                      THEN i.expires_at END)        AS expires_at,
             MAX(i.note)                            AS note,
             MAX(i.favorite)                        AS favorite,
+            COALESCE(MAX(i.tags), '[]')            AS tags,
             json_extract(d.data, '$.name')         AS name,
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
@@ -96,6 +97,8 @@ def get_inventory(request: Request) -> list[dict]:
         raw_effects = d.pop("effects_json", None)
         d["effects"] = _json.loads(raw_effects) if raw_effects else []
         d["description"] = d.get("description") or ""
+        raw_tags = d.get("tags", "[]")
+        d["tags"] = _json.loads(raw_tags) if isinstance(raw_tags, str) else []
         result.append(d)
     return result
 
@@ -238,6 +241,51 @@ def patch_inventory_note(instance_id: str, body: NoteRequest, request: Request) 
     )
     db.commit()
     return {"instance_id": instance_id, "note": body.note}
+
+
+_MAX_TAGS = 3
+_MAX_TAG_LEN = 12
+
+
+class TagsRequest(BaseModel):
+    tags: list[str]
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str]) -> list[str]:
+        if len(v) > _MAX_TAGS:
+            raise ValueError(f"A maximum of {_MAX_TAGS} tags are allowed")
+        cleaned = []
+        for tag in v:
+            tag = tag.strip()
+            if len(tag) > _MAX_TAG_LEN:
+                raise ValueError(f"Each tag must be {_MAX_TAG_LEN} characters or fewer (got: {tag!r})")
+            if tag:
+                cleaned.append(tag)
+        return cleaned
+
+
+@router.patch("/instances/{instance_id}/tags")
+def patch_inventory_tags(instance_id: str, body: TagsRequest, request: Request) -> dict:
+    """Set the tags list on a specific inventory instance.
+
+    Rules: max 3 tags, each tag ≤12 characters (stripped). Empty strings are ignored.
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    """
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT instance_id FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+
+    db.execute(
+        "UPDATE inventory SET tags=? WHERE instance_id=?",
+        (json.dumps(body.tags), instance_id),
+    )
+    db.commit()
+    return {"instance_id": instance_id, "tags": body.tags}
 
 
 class BulkSellRequest(BaseModel):

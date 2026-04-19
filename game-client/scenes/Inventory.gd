@@ -749,6 +749,40 @@ func _make_detail_panel(item: Dictionary) -> Control:
 		note_row.add_child(note_edit)
 		panel.add_child(note_row)
 
+		# ── tags row (3 LineEdits) ────────────────────────────────────────────
+		var existing_tags: Array = item.get("tags", [])
+		var tags_row := HBoxContainer.new()
+		var tags_prefix := Label.new()
+		tags_prefix.text = indent + "Tags:"
+		tags_prefix.add_theme_font_size_override("font_size", 10)
+		tags_prefix.modulate = Color(0.65, 0.65, 0.65)
+		tags_row.add_child(tags_prefix)
+
+		var tag_edits: Array[LineEdit] = []
+		for ti in range(3):
+			var te := LineEdit.new()
+			te.placeholder_text = "tag %d" % (ti + 1)
+			te.max_length = 12
+			te.text = str(existing_tags[ti]) if ti < existing_tags.size() else ""
+			te.custom_minimum_size = Vector2(70, 0)
+			te.add_theme_font_size_override("font_size", 10)
+			tag_edits.append(te)
+			tags_row.add_child(te)
+
+		var save_tags_btn := Button.new()
+		save_tags_btn.text = "Save"
+		save_tags_btn.add_theme_font_size_override("font_size", 10)
+		save_tags_btn.pressed.connect(func() -> void:
+			var new_tags: Array = []
+			for te in tag_edits:
+				var v: String = te.text.strip_edges()
+				if v != "":
+					new_tags.append(v)
+			GameAPI.patch_inventory_tags(iid_str, new_tags)
+		)
+		tags_row.add_child(save_tags_btn)
+		panel.add_child(tags_row)
+
 	return panel
 
 

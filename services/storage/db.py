@@ -41,6 +41,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "inventory", "note",     "TEXT")
     # Per-instance favorite flag
     _safe_add_column(conn, "inventory", "favorite", "INTEGER NOT NULL DEFAULT 0")
+    # Per-instance tags (JSON array, max 3 tags each ≤12 chars, enforced at API layer)
+    _safe_add_column(conn, "inventory", "tags", "TEXT NOT NULL DEFAULT '[]'")
     # Achievement chain parent link
     _safe_add_column(conn, "achievements", "parent_achievement_id", "TEXT")
     # Notification mute preferences per player+event_type
