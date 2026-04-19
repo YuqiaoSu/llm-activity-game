@@ -82,6 +82,7 @@ signal item_repaired(data: Dictionary)
 signal place_upgrade_preview_updated(data: Dictionary)
 signal daily_tip_updated(data: Dictionary)
 signal inventory_lock_toggled(data: Dictionary)
+signal bulk_repair_completed(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -299,6 +300,21 @@ func fetch_place_upgrade_preview(place_id: String, xp: int) -> void:
         else:
             push_error("GameAPI: /places/%s/upgrade-preview response not a Dictionary" % place_id)
     )
+
+
+func bulk_repair_items(rarity: String = "") -> void:
+    var body_dict := {}
+    if rarity != "":
+        body_dict["rarity"] = rarity
+    var body_str := JSON.stringify(body_dict)
+    _http_post("/inventory/bulk-repair", func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            bulk_repair_completed.emit(data)
+            fetch_inventory()
+            fetch_profile()  # XP changed
+        else:
+            push_error("GameAPI: bulk_repair_items → %d" % code)
+    , body_str)
 
 
 func lock_inventory_item(instance_id: String, locked: bool) -> void:

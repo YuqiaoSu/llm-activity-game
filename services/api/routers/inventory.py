@@ -412,6 +412,74 @@ _DURABILITY_WEAR = 10   # points lost per use-event (slot-assign, donate)
 _DURABILITY_MAX  = 100
 
 
+class BulkRepairRequest(BaseModel):
+    rarity: str | None = None
+
+
+@router.post("/bulk-repair")
+def bulk_repair_items(body: BulkRepairRequest, request: Request) -> dict:
+    """Repair all worn (durability < 100), unlocked instances in one action.
+
+    Optional `rarity` filter (e.g. "COMMON") restricts which items are repaired.
+    Deducts the combined XP cost from the player's total XP.
+    Returns 400 on unknown rarity; 402 if insufficient XP.
+    Skips locked instances; returns skipped_locked count.
+    """
+    from services.progression.xp import get_total_xp, deduct_total_xp
+
+    rarity_filter: str | None = None
+    if body.rarity is not None:
+        rarity_filter = body.rarity.upper()
+        if rarity_filter not in _RARITY_ORDER:
+            raise HTTPException(status_code=400, detail=f"Unknown rarity: {body.rarity!r}")
+
+    db = request.app.state.db
+
+    # Find all worn unlocked instances
+    query = """
+        SELECT i.instance_id, i.durability, i.locked,
+               json_extract(d.data, '$.rarity') AS rarity
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND i.durability < 100
+    """
+    params: list = []
+    if rarity_filter:
+        query += " AND json_extract(d.data, '$.rarity') = ?"
+        params.append(rarity_filter)
+
+    rows = db.execute(query, params).fetchall()
+    to_repair = [r for r in rows if int(r["locked"]) == 0]
+    skipped_locked = len(rows) - len(to_repair)
+
+    if not to_repair:
+        return {"repaired_count": 0, "total_xp_spent": 0, "skipped_locked": skipped_locked}
+
+    total_cost = sum(_REPAIR_COSTS.get(r["rarity"] or "COMMON", _REPAIR_COSTS["COMMON"])
+                     for r in to_repair)
+    total_xp = get_total_xp(db, "player_default")
+    if total_xp < total_cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient XP: need {total_cost}, have {total_xp}",
+        )
+
+    deduct_total_xp(db, "player_default", total_cost)
+    for r in to_repair:
+        db.execute(
+            "UPDATE inventory SET durability=? WHERE instance_id=?",
+            (_DURABILITY_MAX, r["instance_id"]),
+        )
+    db.commit()
+
+    return {
+        "repaired_count": len(to_repair),
+        "total_xp_spent": total_cost,
+        "skipped_locked": skipped_locked,
+    }
+
+
 @router.post("/instances/{instance_id}/repair")
 def repair_item(instance_id: str, request: Request) -> dict:
     """Restore an item instance to full durability (100) for an XP cost.

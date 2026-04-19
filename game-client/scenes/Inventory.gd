@@ -41,6 +41,26 @@ func _ready() -> void:
 	$VBox/Header/DropOddsButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/DropOdds.tscn")
 	)
+
+	# "Repair All" button — added dynamically so .tscn doesn't need editing
+	var repair_all_btn := Button.new()
+	repair_all_btn.text = "Repair All 🔧"
+	repair_all_btn.modulate = Color(0.5, 0.9, 1.0)
+	repair_all_btn.add_theme_font_size_override("font_size", 10)
+	repair_all_btn.pressed.connect(func() -> void:
+		GameAPI.bulk_repair_items()
+	)
+	$VBox/Header.add_child(repair_all_btn)
+	GameAPI.bulk_repair_completed.connect(func(d: Dictionary) -> void:
+		var msg := "Repaired %d item(s) for %d XP" % [d.get("repaired_count", 0), d.get("total_xp_spent", 0)]
+		if d.get("skipped_locked", 0) > 0:
+			msg += " (%d locked skipped)" % d.get("skipped_locked", 0)
+		repair_all_btn.text = msg
+		# Reset label after 3 seconds
+		var timer := get_tree().create_timer(3.0)
+		timer.timeout.connect(func() -> void: repair_all_btn.text = "Repair All 🔧")
+	)
+
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
 	GameAPI.item_discarded.connect(_on_item_discarded)
