@@ -69,6 +69,8 @@ signal skill_upgraded(data: Dictionary)
 signal inventory_note_saved(data: Dictionary)
 signal notification_count_updated(count: int)
 signal inventory_favorite_toggled(data: Dictionary)
+signal item_sold(data: Dictionary)
+signal luck_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -167,6 +169,36 @@ func patch_player_settings(xp_target: int) -> void:
             player_settings_updated.emit(data)
         else:
             push_error("GameAPI: patch_player_settings → %d" % code)
+    )
+
+
+func fetch_luck() -> void:
+    _http_get("/player/luck", func(data) -> void:
+        if data is Dictionary:
+            luck_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/luck response is not a Dictionary")
+    )
+
+
+func upgrade_luck() -> void:
+    _http_post("/player/luck/upgrade", func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            luck_updated.emit(data)
+            fetch_profile()
+        else:
+            push_error("GameAPI: upgrade_luck → %d" % code)
+    )
+
+
+func sell_inventory_item(instance_id: String) -> void:
+    _http_post("/inventory/instances/%s/sell" % instance_id, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            item_sold.emit(data)
+            fetch_inventory()
+            fetch_profile()  # XP changed
+        else:
+            push_error("GameAPI: sell_inventory_item %s → %d" % [instance_id, code])
     )
 
 
@@ -274,13 +306,21 @@ func fetch_daily_chart(days: int = 14) -> void:
 	)
 
 
-func fetch_achievements() -> void:
-	_http_get("/achievements", func(data) -> void:
-		if data is Array:
-			achievements_updated.emit(data as Array)
-		else:
-			push_error("GameAPI: /achievements response is not an Array")
-	)
+func fetch_achievements(unlocked_filter: String = "", search_term: String = "") -> void:
+    var params: Array[String] = []
+    if unlocked_filter == "true" or unlocked_filter == "false":
+        params.append("unlocked=" + unlocked_filter)
+    if search_term != "":
+        params.append("search=" + search_term.uri_encode())
+    var url: String = "/achievements"
+    if params.size() > 0:
+        url += "?" + "&".join(params)
+    _http_get(url, func(data) -> void:
+        if data is Array:
+            achievements_updated.emit(data as Array)
+        else:
+            push_error("GameAPI: /achievements response is not an Array")
+    )
 
 
 func fetch_daily_stats(days: int = 7) -> void:

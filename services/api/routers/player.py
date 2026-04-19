@@ -121,6 +121,69 @@ def patch_player_settings(body: _SettingsBody, request: Request) -> dict:
     return {"daily_xp_target": body.daily_xp_target}
 
 
+_LUCK_BASE_COST = 50   # XP cost to upgrade luck from level 5→6
+_LUCK_MAX = 20
+
+
+@router.get("/luck")
+def get_player_luck(request: Request) -> dict:
+    """Return the player's current luck stat and upgrade info."""
+    from services.progression.xp import get_total_xp
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT luck FROM player_profile WHERE character_id='player_default'"
+    ).fetchone()
+    luck: int = row["luck"] if row else 5
+    upgrade_cost = _LUCK_BASE_COST * (2 ** (luck - 5))
+    total_xp = get_total_xp(db, "player_default")
+    return {
+        "luck":         luck,
+        "max_luck":     _LUCK_MAX,
+        "upgrade_cost": upgrade_cost,
+        "can_upgrade":  luck < _LUCK_MAX and total_xp >= upgrade_cost,
+    }
+
+
+@router.post("/luck/upgrade")
+def upgrade_player_luck(request: Request) -> dict:
+    """Spend XP to increase luck by 1 (max 20).
+
+    Returns 409 if already at max. Returns 402 if insufficient XP.
+    """
+    from services.progression.xp import get_total_xp, deduct_total_xp
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT luck FROM player_profile WHERE character_id='player_default'"
+    ).fetchone()
+    luck: int = row["luck"] if row else 5
+
+    if luck >= _LUCK_MAX:
+        raise HTTPException(status_code=409, detail="Luck is already at maximum")
+
+    upgrade_cost = _LUCK_BASE_COST * (2 ** (luck - 5))
+    total_xp = get_total_xp(db, "player_default")
+    if total_xp < upgrade_cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient XP: need {upgrade_cost}, have {total_xp}",
+        )
+
+    deduct_total_xp(db, "player_default", upgrade_cost)
+    new_luck = luck + 1
+    db.execute(
+        "UPDATE player_profile SET luck=? WHERE character_id='player_default'",
+        (new_luck,),
+    )
+    db.commit()
+    new_cost = _LUCK_BASE_COST * (2 ** (new_luck - 5))
+    return {
+        "luck":         new_luck,
+        "max_luck":     _LUCK_MAX,
+        "upgrade_cost": new_cost,
+        "xp_spent":     upgrade_cost,
+    }
+
+
 class _RenameBody(BaseModel):
     name: str
 

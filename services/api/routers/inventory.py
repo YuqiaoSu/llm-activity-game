@@ -13,6 +13,15 @@ router = APIRouter()
 _RARITY_ORDER = ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 _FUSE_COUNT = 3   # copies required to fuse
 
+# XP awarded when selling an item by rarity
+_SELL_VALUES: dict[str, int] = {
+    "COMMON":    5,
+    "UNCOMMON": 15,
+    "RARE":     30,
+    "EPIC":     60,
+    "LEGENDARY": 100,
+}
+
 
 class EquipRequest(BaseModel):
     equipped: bool
@@ -111,6 +120,75 @@ def discard_item(instance_id: str, request: Request) -> dict:
     db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
     db.commit()
     return {"deleted": True, "instance_id": instance_id}
+
+
+def _get_sell_value(db, instance_id: str) -> tuple[str, int] | None:
+    """Return (rarity, xp_value) for an instance, or None if not found."""
+    row = db.execute(
+        """
+        SELECT json_extract(d.data, '$.rarity') AS rarity
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.instance_id=? AND i.character_id='player_default'
+        """,
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    rarity: str = row["rarity"] or "COMMON"
+    return rarity, _SELL_VALUES.get(rarity, _SELL_VALUES["COMMON"])
+
+
+@router.get("/instances/{instance_id}/sell-value")
+def get_sell_value(instance_id: str, request: Request) -> dict:
+    """Return the XP sell value for an inventory instance.
+
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    """
+    db = request.app.state.db
+    result = _get_sell_value(db, instance_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+    rarity, xp_value = result
+    return {"instance_id": instance_id, "rarity": rarity, "xp_value": xp_value}
+
+
+@router.post("/instances/{instance_id}/sell")
+def sell_item(instance_id: str, request: Request) -> dict:
+    """Sell an inventory instance for XP based on its rarity.
+
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    Returns 409 if the instance is currently placed in a slot.
+    """
+    from services.progression.xp import award_category_xp
+    from services.models.enums import Category
+
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT instance_id, item_id, placed_in FROM inventory"
+        " WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+    if row["placed_in"] is not None:
+        raise HTTPException(status_code=409, detail="Item is placed in a slot; remove it first")
+
+    result = _get_sell_value(db, instance_id)
+    rarity, xp_value = result if result else ("COMMON", _SELL_VALUES["COMMON"])
+
+    db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
+    award_category_xp(db, "player_default", Category.SPECIAL, xp_value)
+
+    from services.reward_ledger.ledger import _insert_notification
+    _insert_notification(db, "player_default", "item_sold", {
+        "instance_id": instance_id,
+        "item_id":     row["item_id"],
+        "rarity":      rarity,
+        "xp_awarded":  xp_value,
+    })
+    db.commit()
+    return {"sold": True, "instance_id": instance_id, "rarity": rarity, "xp_awarded": xp_value}
 
 
 class FavoriteRequest(BaseModel):

@@ -24,6 +24,8 @@ var _goal_bar: ProgressBar = null
 var _goal_label: Label = null
 var _daily_xp_target: int = 100
 var _today_xp: int = 0
+var _luck_row: HBoxContainer = null
+var _luck_label: Label = null
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -118,6 +120,31 @@ func _ready() -> void:
 			name_edit.grab_focus()
 	)
 
+	# Luck row: label + Upgrade button, below goal bar
+	_luck_row = HBoxContainer.new()
+	_luck_label = Label.new()
+	_luck_label.add_theme_font_size_override("font_size", 11)
+	_luck_label.text = "Luck: …"
+	_luck_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var luck_upgrade_btn := Button.new()
+	luck_upgrade_btn.text = "Upgrade"
+	luck_upgrade_btn.add_theme_font_size_override("font_size", 10)
+	luck_upgrade_btn.pressed.connect(func() -> void:
+		GameAPI.upgrade_luck()
+	)
+	_luck_row.add_child(_luck_label)
+	_luck_row.add_child(luck_upgrade_btn)
+	$VBox.add_child(_luck_row)
+	$VBox.move_child(_luck_row, _goal_bar.get_index() + 1)
+	GameAPI.luck_updated.connect(func(data: Dictionary) -> void:
+		var lk: int = data.get("luck", 5)
+		var mx: int = data.get("max_luck", 20)
+		var cost: int = data.get("upgrade_cost", 50)
+		var can_up: bool = data.get("can_upgrade", false)
+		_luck_label.text = "Luck: %d / %d  (upgrade costs %d XP)" % [lk, mx, cost]
+		luck_upgrade_btn.disabled = not can_up
+	)
+
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
@@ -125,6 +152,7 @@ func _ready() -> void:
 	GameAPI.fetch_focus_streak()
 	GameAPI.fetch_xp_projection()
 	GameAPI.fetch_player_settings()
+	GameAPI.fetch_luck()
 
 
 func _exit_tree() -> void:

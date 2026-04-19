@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Query
 from services.progression.xp import get_total_xp, compute_level
 from services.progression.streak import get_streak
 
@@ -34,8 +34,12 @@ def _player_progress_values(db) -> dict[str, int]:
 
 
 @router.get("")
-def get_achievements(request: Request) -> list[dict]:
-    """Return all achievement definitions with unlock, pin, and progress info."""
+def get_achievements(
+    request: Request,
+    unlocked: bool | None = Query(default=None, description="Filter by unlocked state"),
+    search: str | None = Query(default=None, description="Search by name (case-insensitive substring)"),
+) -> list[dict]:
+    """Return achievement definitions with optional unlocked/search filters."""
     db = request.app.state.db
     pinned = _pinned_ids(db)
     progress_vals = _player_progress_values(db)
@@ -53,12 +57,21 @@ def get_achievements(request: Request) -> list[dict]:
         (_PLAYER_ID,),
     ).fetchall()
 
+    search_lower = search.strip().lower() if search else None
     result = []
     for r in rows:
         threshold = int(r["threshold"])
         ctype = r["condition_type"]
-        unlocked = r["unlocked_at"] is not None
-        if unlocked:
+        is_unlocked = r["unlocked_at"] is not None
+
+        # Apply unlocked filter
+        if unlocked is not None and is_unlocked != unlocked:
+            continue
+        # Apply search filter
+        if search_lower and search_lower not in r["name"].lower():
+            continue
+
+        if is_unlocked:
             progress = threshold
             progress_pct = 100
         else:
@@ -71,7 +84,7 @@ def get_achievements(request: Request) -> list[dict]:
             "description":    r["description"],
             "condition_type": ctype,
             "threshold":      threshold,
-            "unlocked":       unlocked,
+            "unlocked":       is_unlocked,
             "unlocked_at":    r["unlocked_at"],
             "pinned":         r["achievement_id"] in pinned,
             "progress":       progress,

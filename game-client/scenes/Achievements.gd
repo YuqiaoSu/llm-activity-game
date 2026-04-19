@@ -12,16 +12,55 @@ const _COLOR_PIN_BTN   := Color(0.20, 0.60, 0.90)
 const _MAX_PINS        := 3
 
 var _pin_count: int = 0
+var _filter_opt: OptionButton = null
+var _search_edit: LineEdit    = null
 
 
 func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
+
+	# Build filter row and insert after Header (index 1)
+	var filter_row := HBoxContainer.new()
+	filter_row.add_theme_constant_override("separation", 8)
+
+	_filter_opt = OptionButton.new()
+	_filter_opt.add_item("All")
+	_filter_opt.add_item("Unlocked")
+	_filter_opt.add_item("Locked")
+	_filter_opt.item_selected.connect(func(_idx: int) -> void: _refresh())
+
+	var search_lbl := Label.new()
+	search_lbl.text = "Search:"
+
+	_search_edit = LineEdit.new()
+	_search_edit.placeholder_text = "name..."
+	_search_edit.custom_minimum_size = Vector2(160, 0)
+	_search_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_search_edit.text_changed.connect(func(_t: String) -> void: _refresh())
+
+	filter_row.add_child(_filter_opt)
+	filter_row.add_child(search_lbl)
+	filter_row.add_child(_search_edit)
+
+	var vbox: VBoxContainer = $VBox
+	vbox.add_child(filter_row)
+	vbox.move_child(filter_row, 1)
+
 	GameAPI.achievements_updated.connect(_on_achievements)
 	GameAPI.achievement_pinned.connect(_on_pin_changed)
 	GameAPI.achievement_unpinned.connect(_on_pin_changed)
-	GameAPI.fetch_achievements()
+	_refresh()
+
+
+func _refresh() -> void:
+	var unlocked_filter: String = ""
+	match _filter_opt.selected if is_instance_valid(_filter_opt) else 0:
+		1: unlocked_filter = "true"
+		2: unlocked_filter = "false"
+	var search_term: String = _search_edit.text.strip_edges() if is_instance_valid(_search_edit) else ""
+	GameAPI.fetch_achievements(unlocked_filter, search_term)
 
 
 func _exit_tree() -> void:
@@ -34,7 +73,7 @@ func _exit_tree() -> void:
 
 
 func _on_pin_changed(_data: Dictionary) -> void:
-	GameAPI.fetch_achievements()
+	_refresh()
 
 
 func _on_achievements(entries: Array) -> void:

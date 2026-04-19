@@ -500,17 +500,31 @@ func _make_card(item: Dictionary) -> Control:
 	hbox.add_child(cat_lbl)
 	hbox.add_child(equip_btn)
 
-	# Discard button — only when an unplaced copy exists
+	# Discard + Sell buttons — only when an unplaced copy exists
 	var avail_iid = item.get("available_instance_id", null)
 	if avail_iid != null:
+		var iid: String = str(avail_iid)
+
 		var discard_btn := Button.new()
 		discard_btn.text = "Discard"
 		discard_btn.modulate = Color(0.9, 0.4, 0.4)
-		var iid: String = str(avail_iid)
 		discard_btn.pressed.connect(func() -> void:
 			GameAPI.discard_item(iid)
 		)
 		hbox.add_child(discard_btn)
+
+		# Sell button — shows XP value based on rarity
+		var rarity_sell: String = item.get("rarity", "COMMON")
+		var sell_xp_map := {"COMMON": 5, "UNCOMMON": 15, "RARE": 30, "EPIC": 60, "LEGENDARY": 100}
+		var sell_xp: int = sell_xp_map.get(rarity_sell, 5)
+		var sell_btn := Button.new()
+		sell_btn.text = "Sell +%dXP" % sell_xp
+		sell_btn.modulate = Color(0.65, 0.90, 0.55)  # light green
+		sell_btn.add_theme_font_size_override("font_size", 10)
+		sell_btn.pressed.connect(func() -> void:
+			GameAPI.sell_inventory_item(iid)
+		)
+		hbox.add_child(sell_btn)
 
 	# Fuse button — 3× same rarity → 1× next rarity (not available for LEGENDARY)
 	var rarity: String = item.get("rarity", "")
