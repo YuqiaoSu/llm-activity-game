@@ -94,6 +94,12 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "streak_state", "challenge_weekly_streak",  "INTEGER NOT NULL DEFAULT 0")
     _safe_add_column(conn, "streak_state", "challenge_longest_streak", "INTEGER NOT NULL DEFAULT 0")
     _safe_add_column(conn, "streak_state", "last_challenge_week",      "TEXT")
+    # Player-set mood (happy/neutral/sad/anxious) with timestamp for 24h decay
+    _safe_add_column(conn, "player_profile", "mood",        "TEXT NOT NULL DEFAULT 'neutral'")
+    _safe_add_column(conn, "player_profile", "mood_set_at", "TEXT")
+    # Daily login streak
+    _safe_add_column(conn, "streak_state", "login_streak",     "INTEGER NOT NULL DEFAULT 0")
+    _safe_add_column(conn, "streak_state", "last_login_date",  "TEXT")
 
 
 def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

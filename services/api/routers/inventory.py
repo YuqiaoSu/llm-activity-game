@@ -87,7 +87,8 @@ def get_inventory(
             json_extract(d.data, '$.icon')         AS icon,
             json_extract(d.data, '$.description')  AS description,
             json_extract(d.data, '$.effects')      AS effects_json,
-            c.first_seen_at
+            c.first_seen_at,
+            CAST(julianday('now') - julianday(MIN(i.acquired_at)) AS INTEGER) AS age_days
         FROM inventory i
         LEFT JOIN item_definitions d ON i.item_id = d.item_id
         LEFT JOIN collection_log c
@@ -108,6 +109,9 @@ def get_inventory(
         d["description"] = d.get("description") or ""
         raw_tags = d.get("tags", "[]")
         d["tags"] = _json.loads(raw_tags) if isinstance(raw_tags, str) else []
+        age_days: int = d.get("age_days") or 0
+        d["age_days"] = age_days
+        d["is_vintage"] = age_days >= 30
         if tag_lower and not any(t.lower() == tag_lower for t in d["tags"]):
             continue
         result.append(d)
@@ -180,7 +184,7 @@ def sell_item(instance_id: str, request: Request) -> dict:
 
     db = request.app.state.db
     row = db.execute(
-        "SELECT instance_id, item_id, placed_in FROM inventory"
+        "SELECT instance_id, item_id, placed_in, acquired_at FROM inventory"
         " WHERE instance_id=? AND character_id='player_default'",
         (instance_id,),
     ).fetchone()
@@ -191,7 +195,17 @@ def sell_item(instance_id: str, request: Request) -> dict:
     _assert_not_locked(db, instance_id)
 
     result = _get_sell_value(db, instance_id)
-    rarity, xp_value = result if result else ("COMMON", _SELL_VALUES["COMMON"])
+    rarity, base_xp = result if result else ("COMMON", _SELL_VALUES["COMMON"])
+
+    # Vintage bonus: +20% sell value for items held 30+ days
+    age_row = db.execute(
+        "SELECT CAST(julianday('now') - julianday(acquired_at) AS INTEGER) AS age_days"
+        " FROM inventory WHERE instance_id=?",
+        (instance_id,),
+    ).fetchone()
+    age_days: int = int(age_row["age_days"]) if age_row and age_row["age_days"] is not None else 0
+    is_vintage = age_days >= 30
+    xp_value = int(base_xp * 1.2) if is_vintage else base_xp
 
     db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
     award_category_xp(db, "player_default", Category.SPECIAL, xp_value)
@@ -202,9 +216,10 @@ def sell_item(instance_id: str, request: Request) -> dict:
         "item_id":     row["item_id"],
         "rarity":      rarity,
         "xp_awarded":  xp_value,
+        "is_vintage":  is_vintage,
     })
     db.commit()
-    return {"sold": True, "instance_id": instance_id, "rarity": rarity, "xp_awarded": xp_value}
+    return {"sold": True, "instance_id": instance_id, "rarity": rarity, "xp_awarded": xp_value, "is_vintage": is_vintage}
 
 
 class FavoriteRequest(BaseModel):

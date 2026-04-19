@@ -31,6 +31,7 @@ from services.progression.decay import (
     consume_recovery_bonus,
     RECOVERY_MULTIPLIER,
 )
+from services.progression.mood import drop_mood_multiplier
 
 _STREAK_BONUS_THRESHOLD = 3
 _STREAK_BONUS_FACTOR = 1.1
@@ -226,6 +227,9 @@ class SyncAgent:
         # Apply recovery bonus multiplier for returning after dormancy
         if had_recovery:
             xp_multiplier *= RECOVERY_MULTIPLIER
+
+        # Apply player-set mood multiplier (drops to neutral after 24h inactivity)
+        xp_multiplier *= drop_mood_multiplier(self.db)
 
         # Combo bonus: 1.1× when ≥ 3 distinct categories active this poll
         combo_categories: set[str] = set()

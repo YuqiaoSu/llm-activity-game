@@ -592,3 +592,123 @@ def equip_title(title_id: str, request: Request) -> dict:
     )
     db.commit()
     return {"equipped_title": title_id}
+
+
+# ── Player-set mood ────────────────────────────────────────────────────────────
+
+_VALID_MOODS = {"happy", "neutral", "sad", "anxious"}
+
+
+class _MoodBody(BaseModel):
+    mood: str
+
+    @field_validator("mood")
+    @classmethod
+    def validate_mood(cls, v: str) -> str:
+        if v not in _VALID_MOODS:
+            raise ValueError(f"mood must be one of: {sorted(_VALID_MOODS)}")
+        return v
+
+
+@router.get("/mood")
+def get_player_mood(request: Request) -> dict:
+    """Return the player's current self-set mood and when it was set."""
+    from services.progression.mood import drop_mood_multiplier, _MOOD_DECAY_HOURS
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT mood, mood_set_at FROM player_profile WHERE character_id='player_default'"
+    ).fetchone()
+    mood: str = (row["mood"] if row else None) or "neutral"
+    mood_set_at: str | None = row["mood_set_at"] if row else None
+    multiplier = drop_mood_multiplier(db)
+    return {"mood": mood, "mood_set_at": mood_set_at, "drop_multiplier": multiplier}
+
+
+@router.patch("/mood")
+def set_player_mood(body: _MoodBody, request: Request) -> dict:
+    """Set the player's mood. Resets the 24-hour decay timer.
+
+    Returns 422 if mood is not one of: happy, neutral, sad, anxious.
+    """
+    from datetime import datetime, timezone
+    db = request.app.state.db
+    now_ts = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        "UPDATE player_profile SET mood=?, mood_set_at=? WHERE character_id='player_default'",
+        (body.mood, now_ts),
+    )
+    db.commit()
+    from services.progression.mood import drop_mood_multiplier
+    return {"mood": body.mood, "mood_set_at": now_ts, "drop_multiplier": drop_mood_multiplier(db)}
+
+
+# ── Daily login streak ─────────────────────────────────────────────────────────
+
+_LOGIN_CHECKIN_XP = 10
+_LOGIN_BONUS_INTERVAL = 7
+_LOGIN_BONUS_XP = 100
+
+
+@router.get("/login-streak")
+def get_login_streak(request: Request) -> dict:
+    """Return the player's daily login streak."""
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT login_streak, last_login_date FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    streak: int = int(row["login_streak"]) if row and row["login_streak"] else 0
+    last_login: str | None = row["last_login_date"] if row else None
+    next_reward_at: int = _LOGIN_BONUS_INTERVAL - (streak % _LOGIN_BONUS_INTERVAL)
+    if streak > 0 and streak % _LOGIN_BONUS_INTERVAL == 0:
+        next_reward_at = _LOGIN_BONUS_INTERVAL
+    return {"current_streak": streak, "last_login_date": last_login, "next_reward_at": next_reward_at}
+
+
+@router.post("/login-checkin")
+def post_login_checkin(request: Request) -> dict:
+    """Record a daily login. Idempotent for the same calendar day.
+
+    Awards 10 XP per check-in plus a 100 XP bonus every 7 days.
+    Resets streak to 1 when a day is missed.
+    """
+    from services.progression.xp import award_category_xp
+    from services.models.enums import Category
+    db = request.app.state.db
+    today = date.today().isoformat()
+
+    row = db.execute(
+        "SELECT login_streak, last_login_date FROM streak_state WHERE player_id='default'"
+    ).fetchone()
+    streak: int = int(row["login_streak"]) if row and row["login_streak"] else 0
+    last_login: str | None = row["last_login_date"] if row else None
+
+    # Idempotent — already checked in today
+    if last_login == today:
+        next_reward_at = _LOGIN_BONUS_INTERVAL - (streak % _LOGIN_BONUS_INTERVAL)
+        return {"login_streak": streak, "xp_awarded": 0, "streak_bonus": False, "already_checked_in": True, "next_reward_at": next_reward_at}
+
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    new_streak = streak + 1 if last_login == yesterday else 1
+
+    xp_awarded = _LOGIN_CHECKIN_XP
+    streak_bonus = new_streak % _LOGIN_BONUS_INTERVAL == 0
+    if streak_bonus:
+        xp_awarded += _LOGIN_BONUS_XP
+
+    award_category_xp(db, "player_default", Category.SPECIAL, xp_awarded)
+    db.execute(
+        "UPDATE streak_state SET login_streak=?, last_login_date=? WHERE player_id='default'",
+        (new_streak, today),
+    )
+    db.commit()
+
+    next_reward_at = _LOGIN_BONUS_INTERVAL - (new_streak % _LOGIN_BONUS_INTERVAL)
+    if new_streak % _LOGIN_BONUS_INTERVAL == 0:
+        next_reward_at = _LOGIN_BONUS_INTERVAL
+    return {
+        "login_streak": new_streak,
+        "xp_awarded": xp_awarded,
+        "streak_bonus": streak_bonus,
+        "already_checked_in": False,
+        "next_reward_at": next_reward_at,
+    }
