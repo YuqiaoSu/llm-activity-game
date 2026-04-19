@@ -71,6 +71,9 @@ signal notification_count_updated(count: int)
 signal inventory_favorite_toggled(data: Dictionary)
 signal item_sold(data: Dictionary)
 signal luck_updated(data: Dictionary)
+signal bulk_sell_completed(data: Dictionary)
+signal notification_prefs_updated(entries: Array)
+signal notification_pref_patched(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -729,6 +732,40 @@ func fetch_heatmap(weeks: int = 12) -> void:
 			heatmap_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /history/heatmap response is not an Array")
+	)
+
+
+func bulk_sell_items(rarity: String, category: String = "") -> void:
+	var body: Dictionary = {"rarity": rarity}
+	if category != "":
+		body["category"] = category
+	_http_post("/inventory/bulk-sell", func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			bulk_sell_completed.emit(data)
+			fetch_inventory()
+			fetch_profile()
+		else:
+			push_error("GameAPI: bulk_sell_items → %d" % code)
+	, JSON.stringify(body))
+
+
+func fetch_notification_prefs() -> void:
+	_http_get("/notifications/prefs", func(data) -> void:
+		if data is Array:
+			notification_prefs_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /notifications/prefs response is not an Array")
+	)
+
+
+func patch_notification_pref(event_type: String, muted: bool) -> void:
+	_http_patch("/notifications/prefs/" + event_type, JSON.stringify({"muted": muted}),
+		func(code: int, data: Dictionary) -> void:
+			if code == 200:
+				notification_pref_patched.emit(data)
+				fetch_notification_prefs()
+			else:
+				push_error("GameAPI: patch_notification_pref %s → %d" % [event_type, code])
 	)
 
 

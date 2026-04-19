@@ -299,7 +299,7 @@ class SyncAgent:
             pool = eligible_items(catalogue, chunk, _SENTINEL_PLACE)
 
             for roll_n in range(rolls):
-                winner = weighted_draw(pool, DEFAULT_RARITY_WEIGHTS, drop_weight_mods=drop_mods)
+                winner = weighted_draw(pool, DEFAULT_RARITY_WEIGHTS, drop_weight_mods=drop_mods, luck=luck)
                 if winner:
                     record_drop(
                         self.db,

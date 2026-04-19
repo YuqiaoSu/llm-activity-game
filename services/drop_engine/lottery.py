@@ -57,14 +57,22 @@ def weighted_draw(
     items: list[ItemDefinition],
     base_weights: dict[Rarity, float],
     drop_weight_mods: dict[str, float],
+    luck: int = 10,
 ) -> ItemDefinition | None:
-    """Weighted random draw; `drop_weight_mods` multiplies a rarity's base weight."""
+    """Weighted random draw; `drop_weight_mods` multiplies a rarity's base weight.
+
+    `luck` (5–20, neutral at 10) scales non-COMMON rarity weights by (luck/10)^0.5,
+    so higher luck biases draws toward rarer drops.
+    """
     if not items:
         return None
 
+    luck_factor = (luck / 10) ** 0.5
     weights: list[float] = []
     for item in items:
         base = base_weights.get(item.rarity, 1.0)
+        if item.rarity != Rarity.COMMON:
+            base *= luck_factor
         mod = drop_weight_mods.get(item.rarity.value, 1.0)
         weights.append(base * mod)
 

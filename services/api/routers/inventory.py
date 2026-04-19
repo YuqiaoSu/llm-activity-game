@@ -240,6 +240,69 @@ def patch_inventory_note(instance_id: str, body: NoteRequest, request: Request) 
     return {"instance_id": instance_id, "note": body.note}
 
 
+class BulkSellRequest(BaseModel):
+    rarity: str
+    category: str | None = None
+
+
+@router.post("/bulk-sell")
+def bulk_sell_items(body: BulkSellRequest, request: Request) -> dict:
+    """Sell all unplaced, non-expired instances of a given rarity (and optional category).
+
+    Returns 400 if rarity is not valid.
+    Returns {sold_count, total_xp_earned, rarity, category}.
+    """
+    from services.progression.xp import award_category_xp
+    from services.models.enums import Category as XPCategory
+    from services.reward_ledger.ledger import _insert_notification
+
+    rarity_upper = body.rarity.upper()
+    if rarity_upper not in _RARITY_ORDER:
+        raise HTTPException(status_code=400, detail=f"Unknown rarity: {body.rarity!r}")
+
+    xp_per_item = _SELL_VALUES.get(rarity_upper, _SELL_VALUES["COMMON"])
+    db = request.app.state.db
+
+    query = """
+        SELECT i.instance_id
+        FROM inventory i
+        JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND i.placed_in IS NULL
+          AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
+          AND json_extract(d.data, '$.rarity') = ?
+    """
+    params: list = [rarity_upper]
+    if body.category:
+        query += " AND json_extract(d.data, '$.category') = ?"
+        params.append(body.category.upper())
+
+    rows = db.execute(query, params).fetchall()
+    instance_ids = [r["instance_id"] for r in rows]
+
+    if not instance_ids:
+        return {"sold_count": 0, "total_xp_earned": 0, "rarity": rarity_upper, "category": body.category}
+
+    total_xp = xp_per_item * len(instance_ids)
+    for iid in instance_ids:
+        db.execute("DELETE FROM inventory WHERE instance_id=?", (iid,))
+    award_category_xp(db, "player_default", XPCategory.SPECIAL, total_xp)
+    _insert_notification(db, "player_default", "bulk_item_sold", {
+        "rarity":          rarity_upper,
+        "category":        body.category,
+        "sold_count":      len(instance_ids),
+        "total_xp_earned": total_xp,
+    })
+    db.commit()
+
+    return {
+        "sold_count":      len(instance_ids),
+        "total_xp_earned": total_xp,
+        "rarity":          rarity_upper,
+        "category":        body.category,
+    }
+
+
 @router.patch("/{item_id}/equip")
 def equip_item(item_id: str, body: EquipRequest, request: Request) -> dict:
     """Toggle the equipped flag for all instances of item_id owned by the player.

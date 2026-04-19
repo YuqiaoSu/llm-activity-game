@@ -84,6 +84,42 @@ def ack_all_notifications(request: Request) -> dict:
     return {"acknowledged_count": result.rowcount}
 
 
+class MuteBody(BaseModel):
+    muted: bool
+
+
+@router.get("/prefs")
+def get_notification_prefs(request: Request) -> list[dict]:
+    """Return mute preferences for all known notification event types."""
+    db = request.app.state.db
+    rows = db.execute(
+        "SELECT event_type, muted FROM notification_prefs WHERE player_id='player_default'"
+        " ORDER BY event_type ASC"
+    ).fetchall()
+    return [{"event_type": r["event_type"], "muted": bool(r["muted"])} for r in rows]
+
+
+@router.patch("/prefs/{event_type}")
+def patch_notification_pref(event_type: str, body: MuteBody, request: Request) -> dict:
+    """Mute or unmute a specific notification event type.
+
+    Returns 404 if the event_type is not in the known list.
+    """
+    db = request.app.state.db
+    existing = db.execute(
+        "SELECT event_type FROM notification_prefs WHERE player_id='player_default' AND event_type=?",
+        (event_type,),
+    ).fetchone()
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Unknown event_type: {event_type!r}")
+    db.execute(
+        "UPDATE notification_prefs SET muted=? WHERE player_id='player_default' AND event_type=?",
+        (1 if body.muted else 0, event_type),
+    )
+    db.commit()
+    return {"event_type": event_type, "muted": body.muted}
+
+
 class AckByTypeBody(BaseModel):
     event_type: str
 

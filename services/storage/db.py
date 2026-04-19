@@ -41,6 +41,18 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "inventory", "note",     "TEXT")
     # Per-instance favorite flag
     _safe_add_column(conn, "inventory", "favorite", "INTEGER NOT NULL DEFAULT 0")
+    # Notification mute preferences per player+event_type
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS notification_prefs (
+            player_id   TEXT NOT NULL,
+            event_type  TEXT NOT NULL,
+            muted       INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (player_id, event_type)
+        )
+        """
+    )
+    conn.commit()
 
 
 def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -71,6 +83,19 @@ def bootstrap_defaults(conn: sqlite3.Connection) -> None:
     )
     conn.execute("INSERT OR IGNORE INTO sync_state (player_id) VALUES ('default')")
     conn.execute("INSERT OR IGNORE INTO player_settings (player_id) VALUES ('player_default')")
+    # Seed default (unmuted) mute preferences for all known notification event types
+    _known_event_types = [
+        "item_drop", "item_sold", "bulk_item_sold", "level_up",
+        "place_unlock", "place_level_up", "achievement_unlock",
+        "xp_milestone", "streak_milestone", "challenge_progress",
+        "daily_goal_hit",
+    ]
+    for et in _known_event_types:
+        conn.execute(
+            "INSERT OR IGNORE INTO notification_prefs (player_id, event_type, muted)"
+            " VALUES ('player_default', ?, 0)",
+            (et,),
+        )
     conn.commit()
 
 

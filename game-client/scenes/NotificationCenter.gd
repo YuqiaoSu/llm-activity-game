@@ -33,6 +33,8 @@ const _EVENT_COLORS := {
 const _FILTER_VALUES := ["", "item_drop", "level_up", "place_unlock", "place_level_up", "achievement_unlock", "challenge_complete", "challenge_progress", "daily_goal_hit", "xp_milestone"]
 
 var _entries: Array = []
+var _settings_panel: PanelContainer = null
+var _pref_checkboxes: Dictionary = {}   # event_type → CheckBox
 
 
 func _ready() -> void:
@@ -40,6 +42,7 @@ func _ready() -> void:
 		get_tree().change_scene_to_file("res://scenes/Main.tscn")
 	)
 	GameAPI.inbox_updated.connect(_on_inbox)
+	GameAPI.notification_prefs_updated.connect(_on_prefs_updated)
 	_ack_all_btn.pressed.connect(_on_ack_all)
 	_filter_opts.item_selected.connect(_on_filter_changed)
 
@@ -48,12 +51,69 @@ func _ready() -> void:
 	for label: String in ["Item Drop", "Level Up", "Place Unlock", "Place Level Up", "Achievement", "Challenge", "Challenge Progress", "Daily Goal", "XP Milestone"]:
 		_filter_opts.add_item(label)
 
+	_build_settings_panel()
 	_fetch()
+	GameAPI.fetch_notification_prefs()
+
+
+func _build_settings_panel() -> void:
+	# ⚙ toggle button in header
+	var gear_btn := Button.new()
+	gear_btn.text = "⚙ Mute"
+	$VBox/Header.add_child(gear_btn)
+
+	# Settings panel (initially hidden)
+	_settings_panel = PanelContainer.new()
+	_settings_panel.visible = false
+	var sv := VBoxContainer.new()
+	var title_lbl := Label.new()
+	title_lbl.text = "Notification Mute Settings"
+	title_lbl.add_theme_font_size_override("font_size", 13)
+	sv.add_child(title_lbl)
+
+	var known_types: Array[String] = [
+		"item_drop", "item_sold", "bulk_item_sold", "level_up",
+		"place_unlock", "place_level_up", "achievement_unlock",
+		"xp_milestone", "streak_milestone", "challenge_progress",
+		"daily_goal_hit",
+	]
+	for et: String in known_types:
+		var row := HBoxContainer.new()
+		var cb := CheckBox.new()
+		cb.text = "Enable " + et.replace("_", " ").capitalize()
+		cb.button_pressed = true   # default: not muted = enabled
+		var et_captured := et
+		cb.toggled.connect(func(checked: bool) -> void:
+			GameAPI.patch_notification_pref(et_captured, not checked)
+		)
+		_pref_checkboxes[et] = cb
+		row.add_child(cb)
+		sv.add_child(row)
+
+	_settings_panel.add_child(sv)
+	$VBox.add_child(_settings_panel)
+
+	gear_btn.pressed.connect(func() -> void:
+		_settings_panel.visible = not _settings_panel.visible
+	)
 
 
 func _exit_tree() -> void:
 	if GameAPI.inbox_updated.is_connected(_on_inbox):
 		GameAPI.inbox_updated.disconnect(_on_inbox)
+	if GameAPI.notification_prefs_updated.is_connected(_on_prefs_updated):
+		GameAPI.notification_prefs_updated.disconnect(_on_prefs_updated)
+
+
+func _on_prefs_updated(prefs: Array) -> void:
+	for pref in prefs:
+		if not pref is Dictionary:
+			continue
+		var et: String = str(pref.get("event_type", ""))
+		var muted: bool = bool(pref.get("muted", false))
+		if et in _pref_checkboxes:
+			var cb: CheckBox = _pref_checkboxes[et]
+			cb.set_pressed_no_signal(not muted)
 
 
 func _fetch() -> void:

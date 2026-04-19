@@ -14,7 +14,16 @@ def _insert_notification(
     event_type: str,
     payload: dict,
 ) -> None:
-    """Insert one row into pending_notifications. Caller is responsible for commit."""
+    """Insert one row into pending_notifications unless the type is muted.
+
+    Caller is responsible for commit.
+    """
+    mute_row = conn.execute(
+        "SELECT muted FROM notification_prefs WHERE player_id=? AND event_type=?",
+        (character_id, event_type),
+    ).fetchone()
+    if mute_row and mute_row["muted"]:
+        return
     conn.execute(
         """
         INSERT INTO pending_notifications (notification_id, character_id, event_type, payload, created_at)
