@@ -66,6 +66,7 @@ signal skill_unlocked(data: Dictionary)
 signal calendar_updated(entries: Array)
 signal player_settings_updated(data: Dictionary)
 signal skill_upgraded(data: Dictionary)
+signal inventory_note_saved(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -164,6 +165,16 @@ func patch_player_settings(xp_target: int) -> void:
             player_settings_updated.emit(data)
         else:
             push_error("GameAPI: patch_player_settings → %d" % code)
+    )
+
+
+func patch_inventory_note(instance_id: String, note: String) -> void:
+    var body := JSON.stringify({"note": note})
+    _http_patch("/inventory/instances/%s/note" % instance_id, body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            inventory_note_saved.emit(data)
+        else:
+            push_error("GameAPI: patch_inventory_note %s → %d" % [instance_id, code])
     )
 
 

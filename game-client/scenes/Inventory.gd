@@ -47,6 +47,9 @@ func _ready() -> void:
 	GameAPI.places_updated.connect(_on_places)
 	GameAPI.slot_assigned.connect(_on_slot_assigned)
 	GameAPI.donation_completed.connect(_on_donation_completed)
+	GameAPI.inventory_note_saved.connect(func(_data: Dictionary) -> void:
+		GameAPI.fetch_inventory()
+	)
 
 	# Build filter/sort row and insert it between the header and scroll area
 	_filter_row = _make_filter_row()
@@ -76,6 +79,7 @@ func _exit_tree() -> void:
 		GameAPI.slot_assigned.disconnect(_on_slot_assigned)
 	if GameAPI.donation_completed.is_connected(_on_donation_completed):
 		GameAPI.donation_completed.disconnect(_on_donation_completed)
+	# inventory_note_saved: connected via anonymous lambda — no disconnect needed
 
 
 func _on_equip_updated(_item_id: String, _equipped: bool) -> void:
@@ -678,6 +682,29 @@ func _make_detail_panel(item: Dictionary) -> Control:
 	meta_lbl.modulate = Color(0.55, 0.55, 0.55)
 	meta_lbl.add_theme_font_size_override("font_size", 10)
 	panel.add_child(meta_lbl)
+
+	# Note — inline display + edit field
+	var avail_iid = item.get("available_instance_id", null)
+	if avail_iid != null:
+		var note_row := HBoxContainer.new()
+		var note_prefix := Label.new()
+		note_prefix.text = indent + "Note:"
+		note_prefix.add_theme_font_size_override("font_size", 10)
+		note_prefix.modulate = Color(0.65, 0.65, 0.65)
+		var note_edit := LineEdit.new()
+		note_edit.placeholder_text = "Add a note… (max 50 chars)"
+		note_edit.text = str(item.get("note", "")) if item.get("note", null) != null else ""
+		note_edit.max_length = 50
+		note_edit.add_theme_font_size_override("font_size", 10)
+		note_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var iid_str: String = str(avail_iid)
+		var _save_note := func() -> void:
+			GameAPI.patch_inventory_note(iid_str, note_edit.text.strip_edges())
+		note_edit.text_submitted.connect(func(_t: String) -> void: _save_note.call())
+		note_edit.focus_exited.connect(func() -> void: _save_note.call())
+		note_row.add_child(note_prefix)
+		note_row.add_child(note_edit)
+		panel.add_child(note_row)
 
 	return panel
 

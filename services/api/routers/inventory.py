@@ -22,6 +22,19 @@ class FuseRequest(BaseModel):
     item_id: str   # the item type to fuse (must have >= 3 unplaced copies)
 
 
+class NoteRequest(BaseModel):
+    note: str
+
+    from pydantic import field_validator
+
+    @field_validator("note")
+    @classmethod
+    def validate_note(cls, v: str) -> str:
+        if len(v) > 50:
+            raise ValueError("note must be 50 characters or fewer")
+        return v
+
+
 @router.get("")
 def get_inventory(request: Request) -> list[dict]:
     """Return inventory grouped by item_id with a quantity count.
@@ -48,6 +61,7 @@ def get_inventory(request: Request) -> list[dict]:
             MIN(CASE WHEN i.expires_at IS NOT NULL
                           AND i.expires_at > datetime('now')
                      THEN i.expires_at END)        AS expires_at,
+            MAX(i.note)                            AS note,
             json_extract(d.data, '$.name')         AS name,
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
@@ -96,6 +110,29 @@ def discard_item(instance_id: str, request: Request) -> dict:
     db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
     db.commit()
     return {"deleted": True, "instance_id": instance_id}
+
+
+@router.patch("/instances/{instance_id}/note")
+def patch_inventory_note(instance_id: str, body: NoteRequest, request: Request) -> dict:
+    """Set a freeform note (max 50 chars) on a specific inventory instance.
+
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    Pass an empty string to clear the note.
+    """
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT instance_id FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+
+    db.execute(
+        "UPDATE inventory SET note=? WHERE instance_id=?",
+        (body.note if body.note else None, instance_id),
+    )
+    db.commit()
+    return {"instance_id": instance_id, "note": body.note}
 
 
 @router.patch("/{item_id}/equip")
