@@ -490,8 +490,9 @@ func _make_card(item: Dictionary) -> Control:
 	dot.color = RarityColor.for_rarity(item.get("rarity", "COMMON"))
 
 	# Name button toggles the detail panel
+	var is_locked: bool = bool(item.get("locked", false))
 	var name_btn := Button.new()
-	name_btn.text = item.get("name", item.get("item_id", "?"))
+	name_btn.text = ("🔒 " if is_locked else "") + item.get("name", item.get("item_id", "?"))
 	name_btn.flat = true
 	name_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	name_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -766,6 +767,20 @@ func _make_detail_panel(item: Dictionary) -> Control:
 				GameAPI.repair_item(iid_str_dur)
 			)
 			panel.add_child(repair_btn)
+
+	# Lock / Unlock toggle button
+	var lock_iid = item.get("available_instance_id", null)
+	if lock_iid != null:
+		var is_locked_detail: bool = bool(item.get("locked", false))
+		var lock_btn := Button.new()
+		lock_btn.text = "Unlock 🔒" if is_locked_detail else "Lock 🔒"
+		lock_btn.modulate = Color(0.7, 0.7, 1.0) if is_locked_detail else Color(0.75, 0.75, 0.75)
+		lock_btn.add_theme_font_size_override("font_size", 10)
+		var lock_iid_str: String = str(lock_iid)
+		lock_btn.pressed.connect(func() -> void:
+			GameAPI.lock_inventory_item(lock_iid_str, not is_locked_detail)
+		)
+		panel.add_child(lock_btn)
 
 	# Note — inline display + edit field
 	var avail_iid = item.get("available_instance_id", null)

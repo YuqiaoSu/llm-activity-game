@@ -81,6 +81,7 @@ signal player_data_exported(data: Dictionary)
 signal item_repaired(data: Dictionary)
 signal place_upgrade_preview_updated(data: Dictionary)
 signal daily_tip_updated(data: Dictionary)
+signal inventory_lock_toggled(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -297,6 +298,17 @@ func fetch_place_upgrade_preview(place_id: String, xp: int) -> void:
             place_upgrade_preview_updated.emit(data)
         else:
             push_error("GameAPI: /places/%s/upgrade-preview response not a Dictionary" % place_id)
+    )
+
+
+func lock_inventory_item(instance_id: String, locked: bool) -> void:
+    var body := JSON.stringify({"locked": locked})
+    _http_patch("/inventory/instances/%s/lock" % instance_id, body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            inventory_lock_toggled.emit(data)
+            fetch_inventory()
+        else:
+            push_error("GameAPI: lock_inventory_item %s → %d" % [instance_id, code])
     )
 
 

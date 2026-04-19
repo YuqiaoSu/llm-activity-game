@@ -47,6 +47,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "streak_state", "streak_freeze", "INTEGER NOT NULL DEFAULT 0")
     # Item durability (0-100); decremented on slot-assign and donate; repairable for XP
     _safe_add_column(conn, "inventory", "durability", "INTEGER NOT NULL DEFAULT 100")
+    # Item lock flag — prevents accidental sell/discard/bulk-sell
+    _safe_add_column(conn, "inventory", "locked", "INTEGER NOT NULL DEFAULT 0")
     # Daily place XP investment cap tracking
     conn.execute(
         """

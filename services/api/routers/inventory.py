@@ -80,6 +80,7 @@ def get_inventory(
             MAX(i.favorite)                        AS favorite,
             COALESCE(MAX(i.tags), '[]')            AS tags,
             MIN(i.durability)                      AS durability,
+            MAX(i.locked)                          AS locked,
             json_extract(d.data, '$.name')         AS name,
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
@@ -129,6 +130,7 @@ def discard_item(instance_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Item instance not found")
     if row["placed_in"] is not None:
         raise HTTPException(status_code=409, detail="Item is placed in a slot; remove it first")
+    _assert_not_locked(db, instance_id)
 
     db.execute("DELETE FROM inventory WHERE instance_id=?", (instance_id,))
     db.commit()
@@ -186,6 +188,7 @@ def sell_item(instance_id: str, request: Request) -> dict:
         raise HTTPException(status_code=404, detail="Item instance not found")
     if row["placed_in"] is not None:
         raise HTTPException(status_code=409, detail="Item is placed in a slot; remove it first")
+    _assert_not_locked(db, instance_id)
 
     result = _get_sell_value(db, instance_id)
     rarity, xp_value = result if result else ("COMMON", _SELL_VALUES["COMMON"])
@@ -251,6 +254,42 @@ def patch_inventory_note(instance_id: str, body: NoteRequest, request: Request) 
     )
     db.commit()
     return {"instance_id": instance_id, "note": body.note}
+
+
+def _assert_not_locked(db, instance_id: str) -> None:
+    """Raise 409 if the given inventory instance is locked."""
+    row = db.execute(
+        "SELECT locked FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is not None and int(row["locked"]) == 1:
+        raise HTTPException(status_code=409, detail="Item is locked; unlock it before this action")
+
+
+class LockRequest(BaseModel):
+    locked: bool
+
+
+@router.patch("/instances/{instance_id}/lock")
+def patch_inventory_lock(instance_id: str, body: LockRequest, request: Request) -> dict:
+    """Toggle the locked flag on a specific inventory instance.
+
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    """
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT instance_id FROM inventory WHERE instance_id=? AND character_id='player_default'",
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+
+    db.execute(
+        "UPDATE inventory SET locked=? WHERE instance_id=?",
+        (1 if body.locked else 0, instance_id),
+    )
+    db.commit()
+    return {"instance_id": instance_id, "locked": body.locked}
 
 
 _MAX_TAGS = 3
@@ -327,6 +366,7 @@ def bulk_sell_items(body: BulkSellRequest, request: Request) -> dict:
         JOIN item_definitions d ON i.item_id = d.item_id
         WHERE i.character_id = 'player_default'
           AND i.placed_in IS NULL
+          AND i.locked = 0
           AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
           AND json_extract(d.data, '$.rarity') = ?
     """
