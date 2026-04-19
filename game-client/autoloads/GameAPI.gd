@@ -258,13 +258,16 @@ func rename_player(name: String) -> void:
     )
 
 
-func fetch_inventory() -> void:
-    _http_get("/inventory", func(data) -> void:
-        if data is Array:
-            inventory_updated.emit(data as Array)
-        else:
-            push_error("GameAPI: /inventory response is not an Array")
-    )
+func fetch_inventory(tag: String = "") -> void:
+	var path := "/inventory"
+	if tag.strip_edges() != "":
+		path += "?tag=" + tag.strip_edges().uri_encode()
+	_http_get(path, func(data) -> void:
+		if data is Array:
+			inventory_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory response is not an Array")
+	)
 
 
 func fetch_notifications() -> void:

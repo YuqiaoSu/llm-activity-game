@@ -24,6 +24,7 @@ var _filter_category: String = ""    # "" = all
 var _filter_rarity: String   = ""    # "" = all
 var _filter_search: String   = ""    # "" = all; substring match on name/item_id
 var _filter_favorites: bool  = false # true = show only favorited items
+var _filter_tag: String      = ""    # "" = all; server-side tag match
 var _sort_mode: String       = "name"  # "name" | "rarity" | "quantity"
 
 # Filter/sort row (created once in _ready)
@@ -246,6 +247,22 @@ func _make_filter_row() -> HBoxContainer:
 		_rebuild_list(_items_cache)
 	)
 	row.add_child(fav_btn)
+
+	var tag_label := Label.new()
+	tag_label.text = "  Tag:"
+	tag_label.add_theme_font_size_override("font_size", 11)
+	row.add_child(tag_label)
+
+	var tag_edit := LineEdit.new()
+	tag_edit.placeholder_text = "filter tag…"
+	tag_edit.custom_minimum_size.x = 70
+	tag_edit.max_length = 12
+	tag_edit.add_theme_font_size_override("font_size", 11)
+	tag_edit.text_changed.connect(func(t: String) -> void:
+		_filter_tag = t.strip_edges()
+		GameAPI.fetch_inventory(_filter_tag)
+	)
+	row.add_child(tag_edit)
 
 	return row
 

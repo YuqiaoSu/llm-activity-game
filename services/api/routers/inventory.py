@@ -45,7 +45,10 @@ class NoteRequest(BaseModel):
 
 
 @router.get("")
-def get_inventory(request: Request) -> list[dict]:
+def get_inventory(
+    request: Request,
+    tag: str | None = Query(default=None, description="Filter items that have this tag on any instance"),
+) -> list[dict]:
     """Return inventory grouped by item_id with a quantity count.
 
     Each entry represents one distinct item type owned by the player.
@@ -53,6 +56,9 @@ def get_inventory(request: Request) -> list[dict]:
     once all instances have expired.  expires_at in the response is the
     earliest non-NULL expiry across all non-expired instances, or NULL
     for permanent items.
+
+    When `tag` is provided only item types are returned where at least one
+    instance carries that tag (case-insensitive, exact match within the array).
     """
     db = request.app.state.db
     rows = db.execute(
@@ -91,6 +97,7 @@ def get_inventory(request: Request) -> list[dict]:
         """
     ).fetchall()
     import json as _json
+    tag_lower = tag.strip().lower() if tag else None
     result = []
     for row in rows:
         d = dict(row)
@@ -99,6 +106,8 @@ def get_inventory(request: Request) -> list[dict]:
         d["description"] = d.get("description") or ""
         raw_tags = d.get("tags", "[]")
         d["tags"] = _json.loads(raw_tags) if isinstance(raw_tags, str) else []
+        if tag_lower and not any(t.lower() == tag_lower for t in d["tags"]):
+            continue
         result.append(d)
     return result
 
