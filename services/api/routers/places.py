@@ -3,9 +3,11 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
+from services.place_service.upgrade import award_place_xp
+from services.progression.xp import get_total_xp, deduct_total_xp
 
 _MIN_PLACE_LEVEL_FOR_DONATION = 5
 _DEFAULT_BOOST_FACTOR = 0.10   # 10% additive XP multiplier per donated item
@@ -217,6 +219,54 @@ def assign_slot(place_id: str, slot_id: str, body: SlotAssignBody, request: Requ
     place = get_place(db, place_id)
     rebuild_active_effects(db, place)
     return get_place(db, place_id).model_dump()
+
+
+class InvestBody(BaseModel):
+    xp: int = Field(..., ge=1, description="XP to donate to this place (min 1)")
+
+
+@router.post("/{place_id}/invest")
+def invest_xp(place_id: str, body: InvestBody, request: Request) -> dict:
+    """Donate player XP directly to a place, advancing its level progression.
+
+    Deducts `xp` from the player's total XP pool (distributed proportionally
+    across categories) and awards it to the place via award_place_xp.
+
+    Returns 404 if the place does not exist.
+    Returns 409 if the place is not UNLOCKED.
+    Returns 402 if the player does not have enough XP.
+    """
+    db = request.app.state.db
+
+    place_row = db.execute(
+        "SELECT state, xp, level FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    if place_row["state"] != "UNLOCKED":
+        raise HTTPException(status_code=409, detail="Place is not unlocked")
+
+    total_xp = get_total_xp(db, "player_default")
+    if total_xp < body.xp:
+        raise HTTPException(
+            status_code=402,
+            detail=f"Insufficient XP: have {total_xp}, need {body.xp}",
+        )
+
+    deduct_total_xp(db, "player_default", body.xp)
+    levelled_up = award_place_xp(db, place_id, body.xp)
+    db.commit()
+
+    updated = db.execute(
+        "SELECT xp, level FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    return {
+        "place_id":    place_id,
+        "xp_invested": body.xp,
+        "new_xp":      updated["xp"],
+        "new_level":   updated["level"],
+        "levelled_up": levelled_up,
+    }
 
 
 class DonateBody(BaseModel):

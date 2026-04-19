@@ -22,6 +22,7 @@ func _ready() -> void:
 	GameAPI.inventory_updated.connect(_on_inventory_cache)
 	GameAPI.slot_assigned.connect(_on_slot_assigned)
 	GameAPI.place_leaderboard_updated.connect(_on_place_leaderboard)
+	GameAPI.place_xp_invested.connect(_on_xp_invested)
 	GameAPI.fetch_places()
 	GameAPI.fetch_place_leaderboard()
 	# Pre-load inventory so the slot picker is ready without a round-trip delay
@@ -37,6 +38,8 @@ func _exit_tree() -> void:
 		GameAPI.slot_assigned.disconnect(_on_slot_assigned)
 	if GameAPI.place_leaderboard_updated.is_connected(_on_place_leaderboard):
 		GameAPI.place_leaderboard_updated.disconnect(_on_place_leaderboard)
+	if GameAPI.place_xp_invested.is_connected(_on_xp_invested):
+		GameAPI.place_xp_invested.disconnect(_on_xp_invested)
 
 
 func _on_inventory_cache(items: Array) -> void:
@@ -50,6 +53,10 @@ func _on_slot_assigned(_place: Dictionary) -> void:
 	# Refresh both places and inventory after any slot change
 	GameAPI.fetch_places()
 	GameAPI.fetch_inventory()
+
+
+func _on_xp_invested(_result: Dictionary) -> void:
+	GameAPI.fetch_places()
 
 
 func _on_places(places: Array) -> void:
@@ -211,6 +218,29 @@ func _make_card(place: Dictionary) -> Control:
 		lvl_lbl.modulate = Color(0.55, 0.85, 1.0)
 		lvl_lbl.add_theme_font_size_override("font_size", 10)
 		vbox.add_child(lvl_lbl)
+
+		# ── invest XP row ────────────────────────────────────────────────────
+		var invest_row := HBoxContainer.new()
+		var invest_lbl := Label.new()
+		invest_lbl.text = "  Invest XP:"
+		invest_lbl.add_theme_font_size_override("font_size", 10)
+		var spin := SpinBox.new()
+		spin.min_value = 1
+		spin.max_value = 9999
+		spin.value = 10
+		spin.step = 1
+		spin.suffix = " XP"
+		spin.custom_minimum_size = Vector2(110, 0)
+		var invest_btn := Button.new()
+		invest_btn.text = "Invest"
+		var pid: String = place.get("place_id", "")
+		invest_btn.pressed.connect(func() -> void:
+			GameAPI.invest_xp_in_place(pid, int(spin.value))
+		)
+		invest_row.add_child(invest_lbl)
+		invest_row.add_child(spin)
+		invest_row.add_child(invest_btn)
+		vbox.add_child(invest_row)
 
 	# ── donated perks (only for unlocked places that have received donations) ──
 	if unlocked:

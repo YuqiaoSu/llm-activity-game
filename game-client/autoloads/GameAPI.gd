@@ -467,6 +467,7 @@ func fetch_places() -> void:
 
 
 signal slot_assigned(place: Dictionary)
+signal place_xp_invested(result: Dictionary)
 
 func assign_slot(place_id: String, slot_id: String, instance_id: Variant) -> void:
     ## Assign or remove an item instance from a place slot.
@@ -478,6 +479,16 @@ func assign_slot(place_id: String, slot_id: String, instance_id: Variant) -> voi
         else:
             push_error("GameAPI: assign_slot %s/%s → %d" % [place_id, slot_id, code])
     )
+
+
+func invest_xp_in_place(place_id: String, xp: int) -> void:
+	var body := JSON.stringify({"xp": xp})
+	_http_post("/places/%s/invest" % place_id, body, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			place_xp_invested.emit(data)
+		else:
+			push_error("GameAPI: invest_xp %s → %d" % [place_id, code])
+	)
 
 
 func discard_item(instance_id: String) -> void:
