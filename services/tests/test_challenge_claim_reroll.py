@@ -66,18 +66,21 @@ def test_claim_completed_challenge(client, db):
     assert r.status_code == 200
     data = r.json()
     assert data["challenge_id"] == "work_sprint"
-    assert data["xp_awarded"] == 50
+    # Daily bonus multiplier (2×) applies when work_sprint is today's CotD
+    expected_xp = 100 if data.get("daily_bonus") else 50
+    assert data["xp_awarded"] == expected_xp
     assert data["category"] == "WORK"
 
 
 def test_claim_awards_xp_to_db(client, db):
     _mark_completed(db, "work_sprint")
-    client.post("/challenges/work_sprint/claim")
+    r = client.post("/challenges/work_sprint/claim")
+    expected_xp = r.json()["xp_awarded"]
     row = db.execute(
         "SELECT xp FROM player_category_xp WHERE character_id='player_default' AND category='WORK'"
     ).fetchone()
     assert row is not None
-    assert row["xp"] == 50
+    assert row["xp"] == expected_xp
 
 
 def test_claim_sets_reward_given(client, db):

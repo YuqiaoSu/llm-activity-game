@@ -41,6 +41,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "inventory", "note",     "TEXT")
     # Per-instance favorite flag
     _safe_add_column(conn, "inventory", "favorite", "INTEGER NOT NULL DEFAULT 0")
+    # Achievement chain parent link
+    _safe_add_column(conn, "achievements", "parent_achievement_id", "TEXT")
     # Notification mute preferences per player+event_type
     conn.execute(
         """
@@ -96,6 +98,9 @@ def bootstrap_defaults(conn: sqlite3.Connection) -> None:
             " VALUES ('player_default', ?, 0)",
             (et,),
         )
+    # Seed achievement definitions + chain parent links (idempotent)
+    from services.seeds.achievements import seed_achievements
+    seed_achievements(conn)
     conn.commit()
 
 

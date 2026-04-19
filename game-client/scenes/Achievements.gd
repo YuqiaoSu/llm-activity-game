@@ -149,22 +149,52 @@ func _make_pin_card(entry: Dictionary) -> Control:
 
 
 func _make_row(entry: Dictionary) -> Control:
-	var unlocked: bool = entry.get("unlocked", false)
-	var pinned: bool   = entry.get("pinned", false)
+	var unlocked: bool      = entry.get("unlocked", false)
+	var pinned: bool        = entry.get("pinned", false)
+	var chain_depth: int    = int(entry.get("chain_depth", 0))
+	var chain_complete: bool = bool(entry.get("chain_complete", true))
+	var has_parent: bool    = entry.get("parent_achievement_id", null) != null
 
 	var vbox := VBoxContainer.new()
+
+	# Chain indent spacer + connector arrow
+	if has_parent:
+		var indent := HBoxContainer.new()
+		var spacer := Control.new()
+		spacer.custom_minimum_size = Vector2(16 * chain_depth, 0)
+		var arrow_lbl := Label.new()
+		arrow_lbl.text = "↳ "
+		arrow_lbl.modulate = Color(0.5, 0.5, 0.5) if not chain_complete else Color(0.6, 0.9, 0.6)
+		arrow_lbl.add_theme_font_size_override("font_size", 11)
+		indent.add_child(spacer)
+		indent.add_child(arrow_lbl)
+		vbox.add_child(indent)
+
+	# Dim locked chain children whose parent is not yet unlocked
+	var effective_color: Color
+	if unlocked:
+		effective_color = _COLOR_UNLOCKED
+	elif has_parent and not chain_complete:
+		effective_color = Color(0.30, 0.30, 0.30)   # very dim — prerequisite needed
+	else:
+		effective_color = _COLOR_LOCKED
 
 	# ── main row ────────────────────────────────────────────────────────────
 	var hbox := HBoxContainer.new()
 
+	if has_parent:
+		var pad := Control.new()
+		pad.custom_minimum_size = Vector2(8 * chain_depth, 0)
+		hbox.add_child(pad)
+
 	var dot := ColorRect.new()
 	dot.custom_minimum_size = Vector2(12, 12)
-	dot.color = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
+	dot.color = effective_color
 
 	var name_lbl := Label.new()
 	name_lbl.text = ("✓ " if unlocked else "  ") + entry.get("name", "?")
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	name_lbl.modulate = _COLOR_UNLOCKED if unlocked else _COLOR_LOCKED
+	name_lbl.modulate = effective_color
 
 	var status_lbl := Label.new()
 	if unlocked:

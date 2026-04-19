@@ -33,6 +33,28 @@ def _player_progress_values(db) -> dict[str, int]:
     }
 
 
+def _build_chain_depth(rows: list) -> dict[str, int]:
+    """Compute chain_depth (0=root) for each achievement_id by walking parent links."""
+    parent_map: dict[str, str | None] = {
+        r["achievement_id"]: r["parent_achievement_id"] for r in rows
+    }
+    depth_cache: dict[str, int] = {}
+
+    def _depth(aid: str) -> int:
+        if aid in depth_cache:
+            return depth_cache[aid]
+        parent = parent_map.get(aid)
+        if parent is None or parent not in parent_map:
+            depth_cache[aid] = 0
+        else:
+            depth_cache[aid] = _depth(parent) + 1
+        return depth_cache[aid]
+
+    for aid in parent_map:
+        _depth(aid)
+    return depth_cache
+
+
 @router.get("")
 def get_achievements(
     request: Request,
@@ -47,7 +69,7 @@ def get_achievements(
     rows = db.execute(
         """
         SELECT a.achievement_id, a.name, a.description, a.condition_type, a.threshold,
-               pa.unlocked_at
+               a.parent_achievement_id, pa.unlocked_at
         FROM achievements a
         LEFT JOIN player_achievements pa
                ON pa.achievement_id = a.achievement_id
@@ -57,12 +79,29 @@ def get_achievements(
         (_PLAYER_ID,),
     ).fetchall()
 
+    chain_depths = _build_chain_depth(rows)
+    unlocked_ids: set[str] = {r["achievement_id"] for r in rows if r["unlocked_at"] is not None}
+
+    # parent_map for chain_complete check: child → parent
+    parent_map: dict[str, str | None] = {
+        r["achievement_id"]: r["parent_achievement_id"] for r in rows
+    }
+
+    def _chain_complete(aid: str) -> bool:
+        parent = parent_map.get(aid)
+        while parent is not None:
+            if parent not in unlocked_ids:
+                return False
+            parent = parent_map.get(parent)
+        return True
+
     search_lower = search.strip().lower() if search else None
     result = []
     for r in rows:
         threshold = int(r["threshold"])
         ctype = r["condition_type"]
         is_unlocked = r["unlocked_at"] is not None
+        aid = r["achievement_id"]
 
         # Apply unlocked filter
         if unlocked is not None and is_unlocked != unlocked:
@@ -79,16 +118,19 @@ def get_achievements(
             progress = min(current, threshold)
             progress_pct = min(100, round(progress / threshold * 100)) if threshold > 0 else 100
         result.append({
-            "achievement_id": r["achievement_id"],
-            "name":           r["name"],
-            "description":    r["description"],
-            "condition_type": ctype,
-            "threshold":      threshold,
-            "unlocked":       is_unlocked,
-            "unlocked_at":    r["unlocked_at"],
-            "pinned":         r["achievement_id"] in pinned,
-            "progress":       progress,
-            "progress_pct":   progress_pct,
+            "achievement_id":       aid,
+            "name":                 r["name"],
+            "description":          r["description"],
+            "condition_type":       ctype,
+            "threshold":            threshold,
+            "unlocked":             is_unlocked,
+            "unlocked_at":          r["unlocked_at"],
+            "pinned":               aid in pinned,
+            "progress":             progress,
+            "progress_pct":         progress_pct,
+            "parent_achievement_id": r["parent_achievement_id"],
+            "chain_depth":          chain_depths.get(aid, 0),
+            "chain_complete":       _chain_complete(aid),
         })
     return result
 

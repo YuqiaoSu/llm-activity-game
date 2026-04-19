@@ -8,7 +8,7 @@ from services.storage.db import get_db
 from services.place_service.service import save_place
 from services.seeds.items import SEED_ITEMS
 from services.seeds.places import SEED_PLACES
-from services.seeds.achievements import SEED_ACHIEVEMENTS
+from services.seeds.achievements import seed_achievements
 from services.seeds.weekly_challenges import SEED_WEEKLY_CHALLENGES
 from services.seeds.events import get_seed_events
 from services.seeds.trade import seed_trade_offers
@@ -33,13 +33,10 @@ def seed(db_path: str = "game.db") -> None:
         save_place(conn, place)
     print(f"  {len(SEED_PLACES)} places seeded.")
 
-    # Achievements
-    for ach in SEED_ACHIEVEMENTS:
-        conn.execute(
-            "INSERT OR IGNORE INTO achievements (achievement_id, name, description, condition_type, threshold) VALUES (?, ?, ?, ?, ?)",
-            ach,
-        )
-    print(f"  {len(SEED_ACHIEVEMENTS)} achievement definitions seeded.")
+    # Achievements (including chain parent links)
+    from services.seeds.achievements import SEED_ACHIEVEMENTS
+    seed_achievements(conn)
+    print(f"  {len(SEED_ACHIEVEMENTS)} achievement definitions seeded with chain links.")
 
     # Weekly challenges
     for ch in SEED_WEEKLY_CHALLENGES:
