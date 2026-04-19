@@ -11,6 +11,10 @@ var _craft_slot_a: Dictionary = {}   # item dict for first craft selection
 var _craft_slot_b: Dictionary = {}   # item dict for second craft selection
 var _craft_panel: VBoxContainer      # created dynamically; shown when a slot is filled
 
+# Compare-mode state
+var _compare_items: Array = []       # up to 2 item dicts selected for side-by-side compare
+var _compare_bar: HBoxContainer      # bar with "Compare →" shown when 2 items picked
+
 var _items_cache: Array  = []        # last received inventory array
 var _places_cache: Array = []        # last received places array (for quick-assign)
 
@@ -276,15 +280,60 @@ func _apply_filter_sort(items: Array) -> Array:
 	return result
 
 
+func _select_for_compare(item: Dictionary) -> void:
+	var item_id: String = item.get("item_id", "")
+	# Deselect if already selected
+	for i in range(_compare_items.size()):
+		if (_compare_items[i] as Dictionary).get("item_id", "") == item_id:
+			_compare_items.remove_at(i)
+			_rebuild_list(_items_cache)
+			return
+	# Add if fewer than 2
+	if _compare_items.size() < 2:
+		_compare_items.append(item)
+	else:
+		_compare_items[0] = _compare_items[1]
+		_compare_items[1] = item
+	_rebuild_list(_items_cache)
+
+
 func _rebuild_list(items: Array) -> void:
 	for child in _item_list.get_children():
 		child.queue_free()
 	_craft_panel = null
+	_compare_bar = null
 
 	# Craft summary panel (shown when at least one slot is filled)
 	if not _craft_slot_a.is_empty() or not _craft_slot_b.is_empty():
 		_craft_panel = _make_craft_panel()
 		_item_list.add_child(_craft_panel)
+
+	# Compare bar (shown when 2 items selected)
+	if _compare_items.size() == 2:
+		_compare_bar = HBoxContainer.new()
+		var a_name: String = (_compare_items[0] as Dictionary).get("name", "Item A")
+		var b_name: String = (_compare_items[1] as Dictionary).get("name", "Item B")
+		var info_lbl := Label.new()
+		info_lbl.text = "Comparing: %s vs %s" % [a_name, b_name]
+		info_lbl.add_theme_font_size_override("font_size", 11)
+		info_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var go_btn := Button.new()
+		go_btn.text = "Compare →"
+		go_btn.modulate = Color(0.60, 0.85, 1.00)
+		go_btn.pressed.connect(func() -> void:
+			GameAPI.compare_items = _compare_items.duplicate()
+			get_tree().change_scene_to_file("res://scenes/ItemCompare.tscn")
+		)
+		var cancel_btn := Button.new()
+		cancel_btn.text = "✕"
+		cancel_btn.pressed.connect(func() -> void:
+			_compare_items.clear()
+			_rebuild_list(_items_cache)
+		)
+		_compare_bar.add_child(info_lbl)
+		_compare_bar.add_child(go_btn)
+		_compare_bar.add_child(cancel_btn)
+		_item_list.add_child(_compare_bar)
 
 	var visible_items := _apply_filter_sort(items)
 
@@ -472,6 +521,22 @@ func _make_card(item: Dictionary) -> Control:
 		_select_for_craft(craft_item_snapshot)
 	)
 	hbox.add_child(craft_sel_btn)
+
+	# Compare toggle
+	var in_compare: bool = false
+	for ci in _compare_items:
+		if (ci as Dictionary).get("item_id", "") == item_id:
+			in_compare = true
+			break
+	var cmp_btn := Button.new()
+	cmp_btn.text = "★ Cmp" if in_compare else "Cmp"
+	cmp_btn.modulate = Color(0.60, 0.85, 1.00) if in_compare else Color(0.75, 0.75, 0.75)
+	cmp_btn.add_theme_font_size_override("font_size", 10)
+	var cmp_snapshot := item.duplicate()
+	cmp_btn.pressed.connect(func() -> void:
+		_select_for_compare(cmp_snapshot)
+	)
+	hbox.add_child(cmp_btn)
 
 	vbox.add_child(hbox)
 

@@ -34,6 +34,9 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     # Focus streak: consecutive poll-days with ≥1 WORK or LEARN chunk
     _safe_add_column(conn, "streak_state", "focus_streak",      "INTEGER NOT NULL DEFAULT 0")
     _safe_add_column(conn, "streak_state", "last_focus_date",   "TEXT")
+    # Skill upgrade tiers
+    _safe_add_column(conn, "skills",        "max_level", "INTEGER NOT NULL DEFAULT 3")
+    _safe_add_column(conn, "player_skills", "level",     "INTEGER NOT NULL DEFAULT 1")
 
 
 def _safe_add_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -63,6 +66,7 @@ def bootstrap_defaults(conn: sqlite3.Connection) -> None:
         ("player_default", "Lumi", _DEFAULT_VISUAL),
     )
     conn.execute("INSERT OR IGNORE INTO sync_state (player_id) VALUES ('default')")
+    conn.execute("INSERT OR IGNORE INTO player_settings (player_id) VALUES ('player_default')")
     conn.commit()
 
 

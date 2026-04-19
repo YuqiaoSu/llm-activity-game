@@ -20,6 +20,10 @@ var _titles_container: VBoxContainer = null
 var _rename_row: HBoxContainer = null
 var _current_name: String = ""
 var _eta_label: Label = null
+var _goal_bar: ProgressBar = null
+var _goal_label: Label = null
+var _daily_xp_target: int = 100
+var _today_xp: int = 0
 
 const _STAGE_COLORS := [
 	Color(0.80, 0.80, 0.90),
@@ -51,6 +55,7 @@ func _ready() -> void:
 	GameAPI.titles_updated.connect(_on_titles)
 	GameAPI.focus_streak_updated.connect(_on_focus_streak)
 	GameAPI.xp_projection_updated.connect(_on_xp_projection)
+	GameAPI.player_settings_updated.connect(_on_player_settings)
 	_poll_button.pressed.connect(_on_poll_pressed)
 
 	# Build rename row once; insert after NameLabel in VBox
@@ -88,6 +93,21 @@ func _ready() -> void:
 	$VBox.add_child(_eta_label)
 	$VBox.move_child(_eta_label, _xp_label.get_index() + 1)
 
+	# Daily goal bar: label + ProgressBar, inserted after StreakLabel
+	_goal_label = Label.new()
+	_goal_label.add_theme_font_size_override("font_size", 11)
+	_goal_label.modulate = Color(0.70, 0.90, 0.70)
+	_goal_label.text = "Daily goal: — XP"
+	_goal_bar = ProgressBar.new()
+	_goal_bar.min_value = 0
+	_goal_bar.max_value = 100
+	_goal_bar.value = 0
+	_goal_bar.custom_minimum_size.y = 8
+	$VBox.add_child(_goal_label)
+	$VBox.add_child(_goal_bar)
+	$VBox.move_child(_goal_label, _streak_label.get_index() + 1)
+	$VBox.move_child(_goal_bar, _goal_label.get_index() + 1)
+
 	_name_label.mouse_filter = Control.MOUSE_FILTER_STOP
 	_name_label.gui_input.connect(func(event: InputEvent) -> void:
 		if event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
@@ -104,6 +124,7 @@ func _ready() -> void:
 	GameAPI.fetch_titles()
 	GameAPI.fetch_focus_streak()
 	GameAPI.fetch_xp_projection()
+	GameAPI.fetch_player_settings()
 
 
 func _exit_tree() -> void:
@@ -121,6 +142,8 @@ func _exit_tree() -> void:
 		GameAPI.focus_streak_updated.disconnect(_on_focus_streak)
 	if GameAPI.xp_projection_updated.is_connected(_on_xp_projection):
 		GameAPI.xp_projection_updated.disconnect(_on_xp_projection)
+	if GameAPI.player_settings_updated.is_connected(_on_player_settings):
+		GameAPI.player_settings_updated.disconnect(_on_player_settings)
 
 
 func _on_poll_pressed() -> void:
@@ -314,8 +337,30 @@ func _rebuild_pinned_details(entries: Array) -> void:
 		_pinned_details.add_child(vbox)
 
 
+func _on_player_settings(data: Dictionary) -> void:
+	_daily_xp_target = data.get("daily_xp_target", 100) as int
+	_update_goal_bar()
+
+
+func _update_goal_bar() -> void:
+	if _goal_bar == null or _goal_label == null:
+		return
+	_goal_label.text = "Daily goal: %d / %d XP" % [_today_xp, _daily_xp_target]
+	_goal_bar.max_value = max(1, _daily_xp_target)
+	_goal_bar.value = mini(_today_xp, _daily_xp_target)
+	if _today_xp >= _daily_xp_target:
+		_goal_label.modulate = Color(0.30, 0.90, 0.30)   # bright green = goal met
+	else:
+		_goal_label.modulate = Color(0.70, 0.90, 0.70)   # muted green = in progress
+
+
 func _on_daily_stats(entries: Array) -> void:
 	_make_sparkline(entries)
+	# Extract today's XP from the entries (newest first; entries[0] = today)
+	if entries.size() > 0:
+		var today := entries[0] as Dictionary
+		_today_xp = today.get("total_xp", 0) as int
+		_update_goal_bar()
 
 
 func _make_sparkline(entries: Array) -> void:

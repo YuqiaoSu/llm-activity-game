@@ -160,6 +160,21 @@ def insert_challenge_progress_notification(
     })
 
 
+def insert_daily_goal_hit_notification(
+    conn: sqlite3.Connection,
+    character_id: str,
+    target: int,
+    xp: int,
+    date_str: str,
+) -> None:
+    """Insert a daily_goal_hit notification. Caller is responsible for commit."""
+    _insert_notification(conn, character_id, "daily_goal_hit", {
+        "target": target,
+        "xp": xp,
+        "date": date_str,
+    })
+
+
 def insert_achievement_notification(
     conn: sqlite3.Connection,
     character_id: str,

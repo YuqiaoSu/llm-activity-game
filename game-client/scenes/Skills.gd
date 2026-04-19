@@ -19,6 +19,7 @@ func _ready() -> void:
     )
     GameAPI.skills_updated.connect(_on_skills)
     GameAPI.skill_unlocked.connect(_on_skill_unlocked)
+    GameAPI.skill_upgraded.connect(_on_skill_upgraded)
     GameAPI.profile_updated.connect(_on_profile)
     GameAPI.fetch_skills()
     GameAPI.fetch_profile()
@@ -29,6 +30,8 @@ func _exit_tree() -> void:
         GameAPI.skills_updated.disconnect(_on_skills)
     if GameAPI.skill_unlocked.is_connected(_on_skill_unlocked):
         GameAPI.skill_unlocked.disconnect(_on_skill_unlocked)
+    if GameAPI.skill_upgraded.is_connected(_on_skill_upgraded):
+        GameAPI.skill_upgraded.disconnect(_on_skill_upgraded)
     if GameAPI.profile_updated.is_connected(_on_profile):
         GameAPI.profile_updated.disconnect(_on_profile)
 
@@ -40,6 +43,10 @@ func _on_profile(data: Dictionary) -> void:
 
 func _on_skill_unlocked(_data: Dictionary) -> void:
     pass  # skills_updated fires automatically after unlock via GameAPI
+
+
+func _on_skill_upgraded(_data: Dictionary) -> void:
+    pass  # skills_updated fires automatically after upgrade via GameAPI
 
 
 func _on_skills(entries: Array) -> void:
@@ -60,9 +67,13 @@ func _on_skills(entries: Array) -> void:
 
 
 func _make_row(skill: Dictionary) -> Control:
-    var unlocked: bool  = skill.get("unlocked", false)
-    var can_unlock: bool = skill.get("can_unlock", false)
-    var xp_cost: int    = skill.get("xp_cost", 0) as int
+    var unlocked: bool    = skill.get("unlocked", false)
+    var can_unlock: bool  = skill.get("can_unlock", false)
+    var can_upgrade: bool = skill.get("can_upgrade", false)
+    var xp_cost: int      = skill.get("xp_cost", 0) as int
+    var level: int        = skill.get("level", 0) as int
+    var max_level: int    = skill.get("max_level", 3) as int
+    var upgrade_cost      = skill.get("upgrade_cost", null)
     var effect_type: String = skill.get("effect_type", "")
     var params: Dictionary  = skill.get("effect_params", {}) as Dictionary
 
@@ -108,22 +119,47 @@ func _make_row(skill: Dictionary) -> Control:
     effect_lbl.add_theme_font_size_override("font_size", 10)
     vbox.add_child(effect_lbl)
 
-    # ── unlock button ────────────────────────────────────────────────────────
+    # ── unlock / level / upgrade row ─────────────────────────────────────────
+    var action_row := HBoxContainer.new()
+
     if unlocked:
         var badge := Label.new()
-        badge.text = "  ✓ Unlocked"
-        badge.modulate = _COLOR_UNLOCKED
+        badge.text = "  ✓ Lv.%d / %d" % [level, max_level]
+        badge.modulate = _COLOR_UNLOCKED if level < max_level else _COLOR_AVAILABLE
         badge.add_theme_font_size_override("font_size", 11)
-        vbox.add_child(badge)
+        badge.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        action_row.add_child(badge)
+
+        if level < max_level:
+            var up_btn := Button.new()
+            var cost_str: String = ("%d XP" % int(upgrade_cost)) if upgrade_cost != null else "?"
+            up_btn.text = "Upgrade → Lv.%d (%s)" % [level + 1, cost_str]
+            up_btn.disabled = not can_upgrade
+            if not can_upgrade:
+                up_btn.modulate = _COLOR_LOCKED
+            var sid: String = skill.get("skill_id", "")
+            up_btn.pressed.connect(func() -> void:
+                GameAPI.upgrade_skill(sid)
+            )
+            action_row.add_child(up_btn)
+        else:
+            var max_badge := Label.new()
+            max_badge.text = "  ★ MAX"
+            max_badge.modulate = _COLOR_AVAILABLE
+            max_badge.add_theme_font_size_override("font_size", 11)
+            action_row.add_child(max_badge)
     else:
         var btn := Button.new()
         btn.text = "Unlock (%d XP)" % xp_cost
         btn.disabled = not can_unlock
+        btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         var sid: String = skill.get("skill_id", "")
         btn.pressed.connect(func() -> void:
             GameAPI.unlock_skill(sid)
         )
-        vbox.add_child(btn)
+        action_row.add_child(btn)
+
+    vbox.add_child(action_row)
 
     var sep := HSeparator.new()
     sep.modulate = Color(1, 1, 1, 0.12)

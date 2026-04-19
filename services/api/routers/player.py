@@ -88,6 +88,39 @@ def _check_earned(db: sqlite3.Connection, criteria: str) -> bool:
             return False
 
 
+class _SettingsBody(BaseModel):
+    daily_xp_target: int
+
+    @field_validator("daily_xp_target")
+    @classmethod
+    def validate_target(cls, v: int) -> int:
+        if v < 1 or v > 10000:
+            raise ValueError("daily_xp_target must be between 1 and 10000")
+        return v
+
+
+@router.get("/settings")
+def get_player_settings(request: Request) -> dict:
+    """Return the player's personal settings (daily XP target etc.)."""
+    db = request.app.state.db
+    row = db.execute(
+        "SELECT daily_xp_target FROM player_settings WHERE player_id='player_default'"
+    ).fetchone()
+    return {"daily_xp_target": row["daily_xp_target"] if row else 100}
+
+
+@router.patch("/settings")
+def patch_player_settings(body: _SettingsBody, request: Request) -> dict:
+    """Update the player's personal settings."""
+    db = request.app.state.db
+    db.execute(
+        "INSERT OR REPLACE INTO player_settings (player_id, daily_xp_target) VALUES ('player_default', ?)",
+        (body.daily_xp_target,),
+    )
+    db.commit()
+    return {"daily_xp_target": body.daily_xp_target}
+
+
 class _RenameBody(BaseModel):
     name: str
 

@@ -18,17 +18,31 @@ def load_active_effects(conn: sqlite3.Connection) -> list[Effect]:
 
 
 def load_skill_effects(conn: sqlite3.Connection, character_id: str) -> list[Effect]:
-    """Return effects from all skills unlocked by the player."""
+    """Return effects from all unlocked skills, scaled by skill level.
+
+    Effect factor is multiplied by (1 + 0.5 × (level - 1)) so Lv.2 = 1.5×, Lv.3 = 2.0×.
+    """
     rows = conn.execute(
         """
-        SELECT s.effect_type, s.effect_params
+        SELECT s.effect_type, s.effect_params, ps.level
         FROM player_skills ps
         JOIN skills s ON s.skill_id = ps.skill_id
         WHERE ps.player_id = ?
         """,
         (character_id,),
     ).fetchall()
-    return [Effect(effect_type=r["effect_type"], target="", params=json.loads(r["effect_params"])) for r in rows]
+    effects: list[Effect] = []
+    for r in rows:
+        params = json.loads(r["effect_params"])
+        level: int = int(r["level"]) if r["level"] else 1
+        scale = 1.0 + 0.5 * (level - 1)
+        if "factor" in params and scale != 1.0:
+            params = dict(params)
+            base_factor: float = float(params["factor"])
+            # Scale the bonus portion: new_factor = 1 + (base_factor - 1) * scale
+            params["factor"] = 1.0 + (base_factor - 1.0) * scale
+        effects.append(Effect(effect_type=r["effect_type"], target="", params=params))
+    return effects
 
 
 def rebuild_active_effects(conn: sqlite3.Connection, place: Place) -> list[Effect]:

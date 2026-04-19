@@ -261,12 +261,20 @@ CREATE TABLE IF NOT EXISTS skills (
     description     TEXT NOT NULL DEFAULT '',
     xp_cost         INTEGER NOT NULL DEFAULT 100,
     effect_type     TEXT NOT NULL,
-    effect_params   TEXT NOT NULL DEFAULT '{}'
+    effect_params   TEXT NOT NULL DEFAULT '{}',
+    max_level       INTEGER NOT NULL DEFAULT 3
 );
 
 CREATE TABLE IF NOT EXISTS player_skills (
     player_id       TEXT NOT NULL,
     skill_id        TEXT NOT NULL REFERENCES skills(skill_id),
     unlocked_at     TEXT NOT NULL,
+    level           INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (player_id, skill_id)
+);
+
+-- player_settings: per-player configurable preferences
+CREATE TABLE IF NOT EXISTS player_settings (
+    player_id           TEXT PRIMARY KEY DEFAULT 'player_default',
+    daily_xp_target     INTEGER NOT NULL DEFAULT 100
 );

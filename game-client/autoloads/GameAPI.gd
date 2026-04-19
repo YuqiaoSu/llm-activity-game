@@ -64,8 +64,11 @@ signal place_leaderboard_updated(entries: Array)
 signal skills_updated(entries: Array)
 signal skill_unlocked(data: Dictionary)
 signal calendar_updated(entries: Array)
+signal player_settings_updated(data: Dictionary)
+signal skill_upgraded(data: Dictionary)
 
 var last_challenge_id: String = ""
+var compare_items: Array = []
 
 
 func fetch_profile() -> void:
@@ -131,6 +134,36 @@ func unlock_skill(skill_id: String) -> void:
             fetch_profile()
         else:
             push_error("GameAPI: unlock_skill %s → %d" % [skill_id, code])
+    )
+
+
+func upgrade_skill(skill_id: String) -> void:
+    _http_post("/skills/%s/upgrade" % skill_id, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            skill_upgraded.emit(data)
+            fetch_skills()
+            fetch_profile()
+        else:
+            push_error("GameAPI: upgrade_skill %s → %d" % [skill_id, code])
+    )
+
+
+func fetch_player_settings() -> void:
+    _http_get("/player/settings", func(data: Dictionary) -> void:
+        if data is Dictionary:
+            player_settings_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/settings response is not a Dictionary")
+    )
+
+
+func patch_player_settings(xp_target: int) -> void:
+    var body := JSON.stringify({"daily_xp_target": xp_target})
+    _http_patch("/player/settings", body, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            player_settings_updated.emit(data)
+        else:
+            push_error("GameAPI: patch_player_settings → %d" % code)
     )
 
 

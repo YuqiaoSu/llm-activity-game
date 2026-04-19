@@ -9,7 +9,7 @@ from services.models.place import Place, PlaceItemPool
 from services.models.item import ItemDefinition
 from services.drop_engine.strategies import RollStrategy, SessionStrategy
 from services.drop_engine.lottery import eligible_items, weighted_draw, DEFAULT_RARITY_WEIGHTS
-from services.reward_ledger.ledger import record_drop, insert_level_up_notification, insert_place_unlock_notification
+from services.reward_ledger.ledger import record_drop, insert_level_up_notification, insert_place_unlock_notification, insert_daily_goal_hit_notification
 from services.progression.xp import award_category_xp, xp_for_chunk, get_total_xp, compute_level
 from services.sync_agent.rate_limiter import RateLimiter
 from services.sync_agent.tracker_client import TrackerClient
@@ -338,6 +338,32 @@ class SyncAgent:
 
         # Check if today's goals are all complete and award streak reward if milestone reached
         check_goal_streak_reward(self.db, self.character_id)
+
+        # Check daily XP goal — fire notification once per day (idempotent via date key in payload)
+        today_str = datetime.now(timezone.utc).date().isoformat()
+        settings_row = self.db.execute(
+            "SELECT daily_xp_target FROM player_settings WHERE player_id='player_default'"
+        ).fetchone()
+        if settings_row:
+            target: int = int(settings_row["daily_xp_target"])
+            today_xp_row = self.db.execute(
+                "SELECT COALESCE(SUM(xp_awarded), 0) AS total FROM chunk_log"
+                " WHERE DATE(processed_at) = ?",
+                (today_str,),
+            ).fetchone()
+            today_xp = int(today_xp_row["total"]) if today_xp_row else 0
+            if today_xp >= target:
+                already = self.db.execute(
+                    "SELECT 1 FROM pending_notifications"
+                    " WHERE character_id=? AND event_type='daily_goal_hit'"
+                    " AND json_extract(payload, '$.date') = ?",
+                    (self.character_id, today_str),
+                ).fetchone()
+                if not already:
+                    insert_daily_goal_hit_notification(
+                        self.db, self.character_id, target, today_xp, today_str
+                    )
+                    self.db.commit()
 
         return PollResult.OK
 
