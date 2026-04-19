@@ -231,15 +231,26 @@ func _make_card(place: Dictionary) -> Control:
 		spin.step = 1
 		spin.suffix = " XP"
 		spin.custom_minimum_size = Vector2(110, 0)
+		var cap_lbl := Label.new()
+		cap_lbl.text = "(500/day)"
+		cap_lbl.modulate = Color(0.6, 0.6, 0.6)
+		cap_lbl.add_theme_font_size_override("font_size", 10)
 		var invest_btn := Button.new()
 		invest_btn.text = "Invest"
 		var pid: String = place.get("place_id", "")
 		invest_btn.pressed.connect(func() -> void:
 			GameAPI.invest_xp_in_place(pid, int(spin.value))
 		)
+		# Update cap label after invest completes
+		GameAPI.place_xp_invested.connect(func(result: Dictionary) -> void:
+			if result.get("place_id", "") == pid:
+				var rem: int = result.get("remaining", 500)
+				cap_lbl.text = "(%d left today)" % rem
+		)
 		invest_row.add_child(invest_lbl)
 		invest_row.add_child(spin)
 		invest_row.add_child(invest_btn)
+		invest_row.add_child(cap_lbl)
 		vbox.add_child(invest_row)
 
 	# ── donated perks (only for unlocked places that have received donations) ──

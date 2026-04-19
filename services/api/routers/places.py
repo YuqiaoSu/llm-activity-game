@@ -221,6 +221,10 @@ def assign_slot(place_id: str, slot_id: str, body: SlotAssignBody, request: Requ
     return get_place(db, place_id).model_dump()
 
 
+_INVEST_DAILY_CAP = 500
+_INVEST_PLAYER = "player_default"
+
+
 class InvestBody(BaseModel):
     xp: int = Field(..., ge=1, description="XP to donate to this place (min 1)")
 
@@ -235,7 +239,9 @@ def invest_xp(place_id: str, body: InvestBody, request: Request) -> dict:
     Returns 404 if the place does not exist.
     Returns 409 if the place is not UNLOCKED.
     Returns 402 if the player does not have enough XP.
+    Returns 429 if the daily cap (500 XP per place) would be exceeded.
     """
+    from datetime import date
     db = request.app.state.db
 
     place_row = db.execute(
@@ -246,26 +252,59 @@ def invest_xp(place_id: str, body: InvestBody, request: Request) -> dict:
     if place_row["state"] != "UNLOCKED":
         raise HTTPException(status_code=409, detail="Place is not unlocked")
 
-    total_xp = get_total_xp(db, "player_default")
+    today = date.today().isoformat()
+    log_row = db.execute(
+        "SELECT total_invested FROM place_invest_log WHERE player_id=? AND place_id=? AND invest_date=?",
+        (_INVEST_PLAYER, place_id, today),
+    ).fetchone()
+    invested_today = int(log_row["total_invested"]) if log_row else 0
+    remaining_cap = _INVEST_DAILY_CAP - invested_today
+    if body.xp > remaining_cap:
+        raise HTTPException(
+            status_code=429,
+            detail={
+                "message": f"Daily cap of {_INVEST_DAILY_CAP} XP per place would be exceeded",
+                "invested_today": invested_today,
+                "cap": _INVEST_DAILY_CAP,
+                "remaining": remaining_cap,
+            },
+        )
+
+    total_xp = get_total_xp(db, _INVEST_PLAYER)
     if total_xp < body.xp:
         raise HTTPException(
             status_code=402,
             detail=f"Insufficient XP: have {total_xp}, need {body.xp}",
         )
 
-    deduct_total_xp(db, "player_default", body.xp)
+    deduct_total_xp(db, _INVEST_PLAYER, body.xp)
     levelled_up = award_place_xp(db, place_id, body.xp)
+
+    # Upsert today's invest log
+    db.execute(
+        """
+        INSERT INTO place_invest_log (player_id, place_id, invest_date, total_invested)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT (player_id, place_id, invest_date)
+        DO UPDATE SET total_invested = total_invested + excluded.total_invested
+        """,
+        (_INVEST_PLAYER, place_id, today, body.xp),
+    )
     db.commit()
 
+    invested_today += body.xp
     updated = db.execute(
         "SELECT xp, level FROM places WHERE place_id=?", (place_id,)
     ).fetchone()
     return {
-        "place_id":    place_id,
-        "xp_invested": body.xp,
-        "new_xp":      updated["xp"],
-        "new_level":   updated["level"],
-        "levelled_up": levelled_up,
+        "place_id":       place_id,
+        "xp_invested":    body.xp,
+        "new_xp":         updated["xp"],
+        "new_level":      updated["level"],
+        "levelled_up":    levelled_up,
+        "invested_today": invested_today,
+        "cap":            _INVEST_DAILY_CAP,
+        "remaining":      _INVEST_DAILY_CAP - invested_today,
     }
 
 

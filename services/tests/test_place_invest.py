@@ -110,7 +110,8 @@ def test_invest_409_on_locked_place(client):
 
 
 def test_invest_402_on_insufficient_xp(client):
-    r = client.post("/places/lab/invest", json={"xp": 999})
+    # Player has 200 XP; request 201 (within 500 cap but over player balance)
+    r = client.post("/places/lab/invest", json={"xp": 201})
     assert r.status_code == 402
 
 
