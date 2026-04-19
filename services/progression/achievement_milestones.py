@@ -94,7 +94,14 @@ def check_and_unlock_milestones(
     now = datetime.now(timezone.utc).isoformat()
     newly_unlocked: list[str] = []
 
-    for aid, name, _desc, condition_type, threshold in _MILESTONES:
+    # Reverse map for chain_next lookup
+    child_rows = db.execute(
+        "SELECT achievement_id, name, parent_achievement_id FROM achievements"
+        " WHERE parent_achievement_id IS NOT NULL"
+    ).fetchall()
+    child_map: dict[str, str] = {r["parent_achievement_id"]: r["name"] for r in child_rows}
+
+    for aid, name, desc, condition_type, threshold in _MILESTONES:
         if aid in already_unlocked:
             continue
         if stats.get(condition_type, 0) >= threshold:
@@ -103,7 +110,11 @@ def check_and_unlock_milestones(
                 " (player_id, achievement_id, unlocked_at) VALUES (?, ?, ?)",
                 (character_id, aid, now),
             )
-            insert_achievement_notification(db, character_id, aid, name)
+            insert_achievement_notification(
+                db, character_id, aid, name,
+                description=desc,
+                chain_next=child_map.get(aid),
+            )
             newly_unlocked.append(aid)
 
     return newly_unlocked

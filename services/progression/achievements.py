@@ -46,8 +46,16 @@ def check_achievements(conn: sqlite3.Connection, character_id: str) -> list[str]
     Caller is responsible for commit.
     """
     all_defs = conn.execute(
-        "SELECT achievement_id, name, condition_type, threshold FROM achievements"
+        "SELECT achievement_id, name, description, condition_type, threshold FROM achievements"
     ).fetchall()
+
+    # Build reverse map: parent_id → child (achievement_id, name) for chain_next lookup
+    child_map: dict[str, tuple[str, str]] = {}
+    for row in conn.execute(
+        "SELECT achievement_id, name, parent_achievement_id FROM achievements"
+        " WHERE parent_achievement_id IS NOT NULL"
+    ).fetchall():
+        child_map[row["parent_achievement_id"]] = (row["achievement_id"], row["name"])
 
     if not all_defs:
         return []
@@ -77,7 +85,13 @@ def check_achievements(conn: sqlite3.Connection, character_id: str) -> list[str]
             "INSERT INTO player_achievements (player_id, achievement_id, unlocked_at) VALUES (?, ?, ?)",
             (character_id, aid, now),
         )
-        insert_achievement_notification(conn, character_id, aid, row["name"])
+        child = child_map.get(aid)
+        chain_next = child[1] if child else None
+        insert_achievement_notification(
+            conn, character_id, aid, row["name"],
+            description=row["description"] or "",
+            chain_next=chain_next,
+        )
         newly_unlocked.append(aid)
 
     return newly_unlocked

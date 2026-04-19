@@ -228,7 +228,15 @@ func _entry_summary(entry: Dictionary) -> String:
 			var lvl = payload.get("new_level", "?")
 			return "%s reached level %s" % [pname, str(lvl)]
 		"achievement_unlock":
-			return str(payload.get("name", "Achievement"))
+			var ach_name: String = str(payload.get("name", "Achievement"))
+			var ach_desc: String = str(payload.get("description", ""))
+			var chain: String    = str(payload.get("chain_next", ""))
+			var line: String     = ach_name
+			if not ach_desc.is_empty():
+				line += " — " + ach_desc
+			if not chain.is_empty() and chain != "null":
+				line += "  → Next: " + chain
+			return line
 		"challenge_complete":
 			return str(payload.get("name", "Challenge")) + " — complete! Claim your reward."
 		"challenge_progress":

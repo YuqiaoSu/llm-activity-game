@@ -208,11 +208,15 @@ def insert_achievement_notification(
     character_id: str,
     achievement_id: str,
     achievement_name: str,
+    description: str = "",
+    chain_next: str | None = None,
 ) -> None:
     """Insert an achievement_unlock pending_notification. Caller is responsible for commit."""
     _insert_notification(conn, character_id, "achievement_unlock", {
         "achievement_id": achievement_id,
-        "name": achievement_name,
+        "name":           achievement_name,
+        "description":    description,
+        "chain_next":     chain_next,
     })
 
 
