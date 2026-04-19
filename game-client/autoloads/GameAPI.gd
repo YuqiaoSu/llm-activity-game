@@ -84,6 +84,7 @@ signal daily_tip_updated(data: Dictionary)
 signal inventory_lock_toggled(data: Dictionary)
 signal bulk_repair_completed(data: Dictionary)
 signal season_updated(data: Dictionary)
+signal item_gifted(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -650,6 +651,16 @@ func donate_item_to_place(place_id: String, instance_id: String) -> void:
 	var body_str := JSON.stringify({"instance_id": instance_id})
 	_http_post("/places/%s/donate" % place_id, func(code: int, data: Dictionary) -> void:
 		donation_completed.emit(code == 200, data)
+	, body_str)
+
+
+func gift_item_to_place(place_id: String, instance_id: String) -> void:
+	var body_str := JSON.stringify({"instance_id": instance_id})
+	_http_post("/places/%s/gift-item" % place_id, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			item_gifted.emit(data)
+		else:
+			push_error("GameAPI: gift_item_to_place %s → %d" % [instance_id, code])
 	, body_str)
 
 

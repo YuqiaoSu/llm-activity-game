@@ -467,3 +467,71 @@ def donate_item(place_id: str, body: DonateBody, request: Request) -> dict:
         "boost_factor": _DEFAULT_BOOST_FACTOR,
         "donated_at": now,
     }
+
+
+_GIFT_XP: dict[str, int] = {
+    "COMMON": 5,
+    "UNCOMMON": 15,
+    "RARE": 30,
+    "EPIC": 60,
+    "LEGENDARY": 100,
+}
+
+
+class GiftItemBody(BaseModel):
+    instance_id: str
+
+
+@router.post("/{place_id}/gift-item")
+def gift_item(place_id: str, body: GiftItemBody, request: Request) -> dict:
+    """Convert an inventory item directly into place XP (one-shot, no perk created).
+
+    XP awarded by rarity: COMMON=5, UNCOMMON=15, RARE=30, EPIC=60, LEGENDARY=100.
+    The item instance is consumed from inventory.
+
+    Returns 404 if the place or item instance is not found.
+    Returns 409 if the instance is locked or the place is not UNLOCKED.
+    """
+    db = request.app.state.db
+
+    place_row = db.execute(
+        "SELECT state, xp, level FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    if place_row["state"] != "UNLOCKED":
+        raise HTTPException(status_code=409, detail="Place is not unlocked")
+
+    inv_row = db.execute(
+        """
+        SELECT i.instance_id, i.item_id, i.locked,
+               json_extract(d.data, '$.rarity') AS rarity
+        FROM inventory i
+        JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.instance_id=? AND i.character_id='player_default'
+        """,
+        (body.instance_id,),
+    ).fetchone()
+    if inv_row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found in inventory")
+    if int(inv_row["locked"]):
+        raise HTTPException(status_code=409, detail="Item is locked; unlock it before gifting")
+
+    rarity: str = inv_row["rarity"] or "COMMON"
+    xp_gained: int = _GIFT_XP.get(rarity, 5)
+
+    db.execute("DELETE FROM inventory WHERE instance_id=?", (body.instance_id,))
+    levelled_up = award_place_xp(db, place_id, xp_gained)
+    _log_place_activity(db, place_id, "gift_item", xp_gained)
+    db.commit()
+
+    updated = db.execute("SELECT xp, level FROM places WHERE place_id=?", (place_id,)).fetchone()
+    return {
+        "place_id":       place_id,
+        "instance_id":    body.instance_id,
+        "rarity":         rarity,
+        "xp_gained":      xp_gained,
+        "new_place_xp":   updated["xp"],
+        "new_place_level": updated["level"],
+        "levelled_up":    levelled_up,
+    }

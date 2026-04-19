@@ -69,6 +69,10 @@ func _ready() -> void:
 	GameAPI.places_updated.connect(_on_places)
 	GameAPI.slot_assigned.connect(_on_slot_assigned)
 	GameAPI.donation_completed.connect(_on_donation_completed)
+	GameAPI.item_gifted.connect(func(_d: Dictionary) -> void:
+		GameAPI.fetch_inventory()
+		GameAPI.fetch_places()
+	)
 	GameAPI.inventory_note_saved.connect(func(_data: Dictionary) -> void:
 		GameAPI.fetch_inventory()
 	)
@@ -683,6 +687,35 @@ func _make_card(item: Dictionary) -> Control:
 				donate_popup.visible = not donate_popup.visible
 			)
 			hbox.add_child(donate_btn)
+
+	# "Gift →" — convert item to place XP instantly (no level requirement)
+	if avail_iid != null:
+		var unlocked_places := _places_cache.filter(func(p): return p.get("state", "") == "UNLOCKED")
+		if unlocked_places.size() > 0:
+			var gift_popup := VBoxContainer.new()
+			gift_popup.visible = false
+			var gift_iid: String = str(avail_iid)
+			for gp in unlocked_places:
+				var gp_btn := Button.new()
+				gp_btn.text = "→ %s" % gp["name"]
+				gp_btn.flat = true
+				gp_btn.add_theme_font_size_override("font_size", 10)
+				var gp_id: String = gp["place_id"]
+				gp_btn.pressed.connect(func() -> void:
+					GameAPI.gift_item_to_place(gp_id, gift_iid)
+					gift_popup.visible = false
+				)
+				gift_popup.add_child(gp_btn)
+			vbox.add_child(gift_popup)
+
+			var gift_btn := Button.new()
+			gift_btn.text = "Gift →"
+			gift_btn.modulate = Color(0.55, 0.85, 0.95)   # teal
+			gift_btn.add_theme_font_size_override("font_size", 10)
+			gift_btn.pressed.connect(func() -> void:
+				gift_popup.visible = not gift_popup.visible
+			)
+			hbox.add_child(gift_btn)
 
 	# ── effect summary row (only when slot effects present) ───────────────────
 	var effects: Array = item.get("effects", [])
