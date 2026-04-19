@@ -148,6 +148,29 @@ func _ready() -> void:
 	GameAPI.streak_freeze_updated.connect(_on_streak_freeze)
 	GameAPI.streak_freeze_bought.connect(func(_d: Dictionary) -> void: GameAPI.fetch_streak_freeze())
 
+	GameAPI.daily_tip_updated.connect(func(d: Dictionary) -> void:
+		var tip_text: String = d.get("tip", "")
+		if tip_text == "":
+			return
+		# Append (or update) the daily tip label at the bottom of the scroll container
+		var tip_node_name := "DailyTipLabel"
+		var scroll: ScrollContainer = $VBox/Scroll
+		var inner: VBoxContainer = scroll.get_child(0) if scroll.get_child_count() > 0 else null
+		if inner == null:
+			return
+		# Remove any existing tip label
+		for child in inner.get_children():
+			if child.name == tip_node_name:
+				child.queue_free()
+		var tip_lbl := Label.new()
+		tip_lbl.name = tip_node_name
+		tip_lbl.text = "💡 " + tip_text
+		tip_lbl.modulate = Color(0.60, 0.60, 0.60)
+		tip_lbl.add_theme_font_size_override("font_size", 10)
+		tip_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		inner.add_child(tip_lbl)
+	)
+
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
@@ -157,6 +180,7 @@ func _ready() -> void:
 	GameAPI.fetch_player_settings()
 	GameAPI.fetch_luck()
 	GameAPI.fetch_streak_freeze()
+	GameAPI.fetch_daily_tip()
 
 
 func _exit_tree() -> void:

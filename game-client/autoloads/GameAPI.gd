@@ -80,6 +80,7 @@ signal place_history_updated(entries: Array)
 signal player_data_exported(data: Dictionary)
 signal item_repaired(data: Dictionary)
 signal place_upgrade_preview_updated(data: Dictionary)
+signal daily_tip_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -296,6 +297,15 @@ func fetch_place_upgrade_preview(place_id: String, xp: int) -> void:
             place_upgrade_preview_updated.emit(data)
         else:
             push_error("GameAPI: /places/%s/upgrade-preview response not a Dictionary" % place_id)
+    )
+
+
+func fetch_daily_tip() -> void:
+    _http_get("/player/daily-tip", func(data) -> void:
+        if data is Dictionary:
+            daily_tip_updated.emit(data)
+        else:
+            push_error("GameAPI: /player/daily-tip response not a Dictionary")
     )
 
 

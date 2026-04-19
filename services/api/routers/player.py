@@ -405,6 +405,43 @@ def buy_streak_freeze(request: Request) -> dict:
     }
 
 
+_TIPS: list[str] = [
+    "Log at least 10 minutes of activity daily to keep XP decay at bay!",
+    "Donating items to places grants permanent +10% XP boosts — pick your best items.",
+    "A 14-day streak unlocks the 'Streak Warrior' milestone achievement.",
+    "Streak freezes protect your streak for one missed day — buy them when you're ahead.",
+    "Your companion's mood affects how much XP your places earn. Stay active!",
+    "Combo bonus: earn XP in 3+ different categories in one poll for a 10% boost.",
+    "Higher luck increases your chance of RARE and EPIC drops — upgrade it when you can.",
+    "Challenge progress notifications fire at 50% — use them to time your final push.",
+    "The daily challenge awards 2× XP. Check which challenge is today's highlight.",
+    "Focus streak tracks consecutive WORK/LEARN days. Build it for special rewards.",
+    "Sell COMMON items you have in abundance to fund skill upgrades.",
+    "Items placed in thematic slots grant extra XP bonuses to that place.",
+    "Repair worn items before placing them — durability affects how long they last.",
+    "XP milestones at 500, 1000, 2500, 5000, and 10000 XP each drop a bonus item.",
+    "Pinned achievements show on your profile card — pick your proudest three.",
+    "Achievement chains unlock in order — complete the parent to reveal the child.",
+    "Invest XP in places to level them up fast — up to 500 XP per place per day.",
+    "Wishlist rare items in the Catalogue so they glow when they drop.",
+    "Weekly challenges reset Monday — check them early to plan your week.",
+    "Export your profile anytime to back up your progress as a JSON snapshot.",
+]
+
+
+@router.get("/daily-tip")
+def get_daily_tip(request: Request) -> dict:
+    """Return the daily motivational tip, deterministically selected by today's date.
+
+    The same tip is returned for all requests within the same UTC calendar day.
+    """
+    import hashlib
+
+    today_key = date.today().isoformat().encode()
+    tip_index: int = int(hashlib.md5(today_key).hexdigest(), 16) % len(_TIPS)
+    return {"tip": _TIPS[tip_index], "tip_index": tip_index}
+
+
 @router.get("/export")
 def export_player_data(request: Request) -> dict:
     """Return the player's complete game state as a single JSON snapshot.
@@ -485,6 +522,40 @@ def export_player_data(request: Request) -> dict:
         "weekly_xp_7d": weekly_xp_7d,
         "export_at":    datetime.now(timezone.utc).isoformat(),
     }
+
+
+_TIPS: list[str] = [
+    "Your XP decay pauses if you log 10+ minutes of activity daily!",
+    "Fuse 3 items of the same rarity to get one of the next tier.",
+    "Donating items to a Level 5+ place grants a permanent 10% XP boost there.",
+    "The Combo Bonus fires when you log ≥ 3 different categories in one session.",
+    "Streak freezes cost 100 XP each and prevent one missed-day reset.",
+    "Higher luck increases your chance of getting RARE and EPIC drops.",
+    "Invest XP into a place to level it up and unlock better drop modifiers.",
+    "Achievements come in chains — unlock the first to reveal the next.",
+    "Timed challenge events add a multiplier to matching-category XP.",
+    "Equip a title on your Profile Card to show off your achievements.",
+    "The activity heatmap shows your 12-week intensity at a glance.",
+    "Place upgrade previews let you see level-up impact before investing.",
+    "Daily goals scale in difficulty as your goal streak grows.",
+    "Sell unwanted items for XP — LEGENDARY items net 100 XP each.",
+    "The recipe browser shows every craft path from COMMON to LEGENDARY.",
+    "Passive skills can unlock extra roll chances on every poll.",
+    "A Focus Streak builds when you log WORK or LEARN chunks every day.",
+    "Wishlisted items get a ★ highlight when they drop in a poll.",
+    "Check the challenge leaderboard to see where you rank against rivals.",
+    "The activity calendar gives a colour-coded view of your productivity.",
+]
+
+
+@router.get("/daily-tip")
+def get_daily_tip() -> dict:
+    """Return today's motivational tip — deterministic for the full UTC day."""
+    import hashlib
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).date().isoformat()
+    idx = int(hashlib.md5(today.encode()).hexdigest(), 16) % len(_TIPS)
+    return {"tip": _TIPS[idx], "tip_index": idx}
 
 
 @router.post("/titles/{title_id}/equip")
