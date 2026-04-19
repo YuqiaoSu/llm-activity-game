@@ -79,6 +79,7 @@ def get_inventory(
             MAX(i.note)                            AS note,
             MAX(i.favorite)                        AS favorite,
             COALESCE(MAX(i.tags), '[]')            AS tags,
+            MIN(i.durability)                      AS durability,
             json_extract(d.data, '$.name')         AS name,
             json_extract(d.data, '$.rarity')       AS rarity,
             json_extract(d.data, '$.category')     AS category,
@@ -357,6 +358,66 @@ def bulk_sell_items(body: BulkSellRequest, request: Request) -> dict:
         "total_xp_earned": total_xp,
         "rarity":          rarity_upper,
         "category":        body.category,
+    }
+
+
+_REPAIR_COSTS: dict[str, int] = {
+    "COMMON":    10,
+    "UNCOMMON":  20,
+    "RARE":      40,
+    "EPIC":      70,
+    "LEGENDARY": 100,
+}
+_DURABILITY_WEAR = 10   # points lost per use-event (slot-assign, donate)
+_DURABILITY_MAX  = 100
+
+
+@router.post("/instances/{instance_id}/repair")
+def repair_item(instance_id: str, request: Request) -> dict:
+    """Restore an item instance to full durability (100) for an XP cost.
+
+    Cost is rarity-tiered: COMMON=10, UNCOMMON=20, RARE=40, EPIC=70, LEGENDARY=100 XP.
+    Returns 404 if the instance doesn't exist or belongs to another player.
+    Returns 409 if the item is already at full durability.
+    Returns 402 if the player doesn't have enough XP.
+    """
+    from services.progression.xp import get_total_xp, deduct_total_xp
+
+    db = request.app.state.db
+    row = db.execute(
+        """
+        SELECT i.instance_id, i.durability,
+               json_extract(d.data, '$.rarity') AS rarity
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.instance_id=? AND i.character_id='player_default'
+        """,
+        (instance_id,),
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Item instance not found")
+
+    current_durability: int = int(row["durability"]) if row["durability"] is not None else _DURABILITY_MAX
+    if current_durability >= _DURABILITY_MAX:
+        raise HTTPException(status_code=409, detail="Item is already at full durability")
+
+    rarity: str = row["rarity"] or "COMMON"
+    cost: int = _REPAIR_COSTS.get(rarity, _REPAIR_COSTS["COMMON"])
+    total_xp = get_total_xp(db, "player_default")
+    if total_xp < cost:
+        raise HTTPException(status_code=402, detail=f"Insufficient XP: need {cost}, have {total_xp}")
+
+    deduct_total_xp(db, "player_default", cost)
+    db.execute(
+        "UPDATE inventory SET durability=? WHERE instance_id=?",
+        (_DURABILITY_MAX, instance_id),
+    )
+    db.commit()
+    return {
+        "instance_id": instance_id,
+        "durability":  _DURABILITY_MAX,
+        "rarity":      rarity,
+        "xp_spent":    cost,
     }
 
 

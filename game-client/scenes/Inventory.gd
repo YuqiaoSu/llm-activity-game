@@ -743,6 +743,30 @@ func _make_detail_panel(item: Dictionary) -> Control:
 	meta_lbl.add_theme_font_size_override("font_size", 10)
 	panel.add_child(meta_lbl)
 
+	# Durability — warn when below 100; show repair button
+	var durability: int = int(item.get("durability", 100))
+	if durability < 100:
+		var dur_lbl := Label.new()
+		dur_lbl.text = indent + "⚠ Worn (%d%%)" % durability
+		dur_lbl.modulate = Color(1.0, 0.5, 0.2) if durability > 0 else Color(0.9, 0.2, 0.2)
+		dur_lbl.add_theme_font_size_override("font_size", 10)
+		panel.add_child(dur_lbl)
+
+		var avail_iid_dur = item.get("available_instance_id", null)
+		if avail_iid_dur != null:
+			var iid_str_dur: String = str(avail_iid_dur)
+			var rarity_r: String = item.get("rarity", "COMMON")
+			var repair_xp_map := {"COMMON": 10, "UNCOMMON": 20, "RARE": 40, "EPIC": 70, "LEGENDARY": 100}
+			var repair_cost: int = repair_xp_map.get(rarity_r, 10)
+			var repair_btn := Button.new()
+			repair_btn.text = "Repair -%dXP" % repair_cost
+			repair_btn.modulate = Color(0.5, 0.9, 1.0)
+			repair_btn.add_theme_font_size_override("font_size", 10)
+			repair_btn.pressed.connect(func() -> void:
+				GameAPI.repair_item(iid_str_dur)
+			)
+			panel.add_child(repair_btn)
+
 	# Note — inline display + edit field
 	var avail_iid = item.get("available_instance_id", null)
 	if avail_iid != null:

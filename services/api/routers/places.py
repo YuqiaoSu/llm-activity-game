@@ -146,6 +146,41 @@ def get_place_leaderboard(request: Request) -> list[dict]:
     ]
 
 
+@router.get("/{place_id}/upgrade-preview")
+def get_place_upgrade_preview(
+    place_id: str,
+    request: Request,
+    xp: int = Query(default=0, ge=0),
+) -> dict:
+    """Return a preview of what investing `xp` into a place would achieve.
+
+    Computes the result purely in Python — no DB write.
+    Returns 404 if the place does not exist.
+    """
+    from services.place_service.upgrade import xp_threshold, xp_to_level
+
+    db = request.app.state.db
+    row = db.execute("SELECT xp, level FROM places WHERE place_id=?", (place_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+
+    current_xp: int   = int(row["xp"])
+    current_level: int = int(row["level"])
+    projected_xp: int  = current_xp + xp
+    projected_level: int = xp_to_level(projected_xp)
+    next_threshold: int  = xp_threshold(projected_level + 1)
+
+    return {
+        "place_id":       place_id,
+        "current_xp":     current_xp,
+        "projected_xp":   projected_xp,
+        "current_level":  current_level,
+        "projected_level": projected_level,
+        "would_level_up": projected_level > current_level,
+        "xp_to_next":     max(0, next_threshold - projected_xp),
+    }
+
+
 @router.get("/{place_id}/history")
 def get_place_history(
     place_id: str,
@@ -241,6 +276,11 @@ def assign_slot(place_id: str, slot_id: str, body: SlotAssignBody, request: Requ
         db.execute(
             "UPDATE inventory SET placed_in=? WHERE instance_id=?",
             (slot_id, body.instance_id),
+        )
+        # Wear the item slightly on slot-assign
+        db.execute(
+            "UPDATE inventory SET durability = MAX(0, durability - 10) WHERE instance_id=?",
+            (body.instance_id,),
         )
 
     # Update slot occupant
@@ -397,7 +437,7 @@ def donate_item(place_id: str, body: DonateBody, request: Request) -> dict:
     if existing:
         raise HTTPException(status_code=409, detail="This item type has already been donated to this place")
 
-    # Consume the item
+    # Consume the item (durability decremented implicitly by deletion — item is gone)
     db.execute("DELETE FROM inventory WHERE instance_id=?", (body.instance_id,))
 
     # Write perk

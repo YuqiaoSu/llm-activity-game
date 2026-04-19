@@ -78,6 +78,7 @@ signal streak_freeze_updated(data: Dictionary)
 signal streak_freeze_bought(data: Dictionary)
 signal place_history_updated(entries: Array)
 signal player_data_exported(data: Dictionary)
+signal item_repaired(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -274,6 +275,17 @@ func patch_inventory_note(instance_id: String, note: String) -> void:
             inventory_note_saved.emit(data)
         else:
             push_error("GameAPI: patch_inventory_note %s → %d" % [instance_id, code])
+    )
+
+
+func repair_item(instance_id: String) -> void:
+    _http_post("/inventory/instances/%s/repair" % instance_id, func(code: int, data: Dictionary) -> void:
+        if code == 200:
+            item_repaired.emit(data)
+            fetch_inventory()
+            fetch_profile()  # XP changed
+        else:
+            push_error("GameAPI: repair_item %s → %d" % [instance_id, code])
     )
 
 
