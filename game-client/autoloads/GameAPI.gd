@@ -87,6 +87,8 @@ signal season_updated(data: Dictionary)
 signal item_gifted(data: Dictionary)
 signal poll_cooldown_updated(sec: int)
 signal challenge_streak_updated(data: Dictionary)
+signal mood_updated(data: Dictionary)
+signal login_streak_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -664,6 +666,43 @@ func donate_item_to_place(place_id: String, instance_id: String) -> void:
 	_http_post("/places/%s/donate" % place_id, func(code: int, data: Dictionary) -> void:
 		donation_completed.emit(code == 200, data)
 	, body_str)
+
+
+func fetch_mood() -> void:
+	_http_get("/player/mood", func(data: Dictionary) -> void:
+		if data is Dictionary:
+			mood_updated.emit(data)
+		else:
+			push_error("GameAPI: /player/mood response is not a Dictionary")
+	)
+
+
+func set_player_mood(mood: String) -> void:
+	var body_str := JSON.stringify({"mood": mood})
+	_http_patch("/player/mood", body_str, func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			mood_updated.emit(data)
+		else:
+			push_error("GameAPI: set_player_mood %s → %d" % [mood, code])
+	)
+
+
+func fetch_login_streak() -> void:
+	_http_get("/player/login-streak", func(data: Dictionary) -> void:
+		if data is Dictionary:
+			login_streak_updated.emit(data)
+		else:
+			push_error("GameAPI: /player/login-streak response is not a Dictionary")
+	)
+
+
+func post_login_checkin() -> void:
+	_http_post("/player/login-checkin", func(code: int, data: Dictionary) -> void:
+		if code == 200:
+			login_streak_updated.emit(data)
+		else:
+			push_error("GameAPI: post_login_checkin → %d" % code)
+	)
 
 
 func gift_item_to_place(place_id: String, instance_id: String) -> void:

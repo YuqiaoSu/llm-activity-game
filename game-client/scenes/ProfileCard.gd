@@ -193,6 +193,46 @@ func _ready() -> void:
 		inner.add_child(tip_lbl)
 	)
 
+	# Mood selector row: 4 emoji buttons, highlights the active mood
+	var mood_row := HBoxContainer.new()
+	mood_row.name = "MoodRow"
+	var mood_lbl := Label.new()
+	mood_lbl.text = "Mood: "
+	mood_lbl.add_theme_font_size_override("font_size", 11)
+	mood_row.add_child(mood_lbl)
+	var _mood_buttons: Dictionary = {}
+	for mood_key in ["happy", "neutral", "sad", "anxious"]:
+		var btn := Button.new()
+		btn.text = _MOOD_EMOJI.get(mood_key, "?")
+		btn.add_theme_font_size_override("font_size", 14)
+		btn.pressed.connect(func() -> void: GameAPI.set_player_mood(mood_key))
+		_mood_buttons[mood_key] = btn
+		mood_row.add_child(btn)
+	$VBox.add_child(mood_row)
+	$VBox.move_child(mood_row, _season_badge.get_index() + 1)
+	GameAPI.mood_updated.connect(func(d: Dictionary) -> void:
+		var active: String = d.get("mood", "neutral")
+		for mk in _mood_buttons:
+			(_mood_buttons[mk] as Button).modulate = \
+				Color(1.0, 0.84, 0.0) if mk == active else Color(1, 1, 1, 0.5)
+	)
+
+	# Login streak badge: below mood row
+	var login_badge := Label.new()
+	login_badge.name = "LoginStreakBadge"
+	login_badge.add_theme_font_size_override("font_size", 11)
+	login_badge.modulate = Color(0.60, 0.85, 1.00)
+	$VBox.add_child(login_badge)
+	$VBox.move_child(login_badge, mood_row.get_index() + 1)
+	GameAPI.login_streak_updated.connect(func(d: Dictionary) -> void:
+		var streak: int = d.get("login_streak", d.get("current_streak", 0)) as int
+		var next: int = d.get("next_reward_at", 7) as int
+		if streak > 0:
+			login_badge.text = "📅 Day %d  · reward in %d day(s)" % [streak, next]
+		else:
+			login_badge.text = ""
+	)
+
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()
 	GameAPI.fetch_daily_stats(7)
@@ -204,6 +244,8 @@ func _ready() -> void:
 	GameAPI.fetch_streak_freeze()
 	GameAPI.fetch_daily_tip()
 	GameAPI.fetch_season()
+	GameAPI.fetch_mood()
+	GameAPI.post_login_checkin()
 
 
 func _exit_tree() -> void:
