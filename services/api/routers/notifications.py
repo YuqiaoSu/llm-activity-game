@@ -120,6 +120,45 @@ def patch_notification_pref(event_type: str, body: MuteBody, request: Request) -
     return {"event_type": event_type, "muted": body.muted}
 
 
+@router.get("/summary")
+def get_notification_summary(request: Request) -> dict:
+    """Return per-type counts and recency for all notifications (read + unread).
+
+    Response:
+      total           - grand total across all types
+      unread          - count of unacknowledged notifications
+      by_type         - list of {event_type, total, unread, latest_at}
+                        sorted by total descending, capped at 10 types
+    """
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT
+            event_type,
+            COUNT(*)                                     AS total,
+            SUM(CASE WHEN acknowledged=0 THEN 1 ELSE 0 END) AS unread,
+            MAX(created_at)                              AS latest_at
+        FROM pending_notifications
+        WHERE character_id='player_default'
+        GROUP BY event_type
+        ORDER BY total DESC
+        LIMIT 10
+        """
+    ).fetchall()
+    by_type = [
+        {
+            "event_type": r["event_type"],
+            "total":      r["total"],
+            "unread":     r["unread"],
+            "latest_at":  r["latest_at"],
+        }
+        for r in rows
+    ]
+    grand_total  = sum(t["total"]  for t in by_type)
+    grand_unread = sum(t["unread"] for t in by_type)
+    return {"total": grand_total, "unread": grand_unread, "by_type": by_type}
+
+
 class AckByTypeBody(BaseModel):
     event_type: str
 

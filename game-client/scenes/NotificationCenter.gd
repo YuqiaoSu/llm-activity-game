@@ -35,6 +35,7 @@ const _FILTER_VALUES := ["", "item_drop", "level_up", "place_unlock", "place_lev
 var _entries: Array = []
 var _settings_panel: PanelContainer = null
 var _pref_checkboxes: Dictionary = {}   # event_type → CheckBox
+var _summary_lbl: Label = null
 
 
 func _ready() -> void:
@@ -43,6 +44,7 @@ func _ready() -> void:
 	)
 	GameAPI.inbox_updated.connect(_on_inbox)
 	GameAPI.notification_prefs_updated.connect(_on_prefs_updated)
+	GameAPI.notification_summary_updated.connect(_on_notification_summary)
 	_ack_all_btn.pressed.connect(_on_ack_all)
 	_filter_opts.item_selected.connect(_on_filter_changed)
 
@@ -51,9 +53,17 @@ func _ready() -> void:
 	for label: String in ["Item Drop", "Level Up", "Place Unlock", "Place Level Up", "Achievement", "Challenge", "Challenge Progress", "Daily Goal", "XP Milestone"]:
 		_filter_opts.add_item(label)
 
+	_summary_lbl = Label.new()
+	_summary_lbl.text = "Loading summary…"
+	_summary_lbl.add_theme_font_size_override("font_size", 11)
+	_summary_lbl.modulate = Color(0.7, 0.85, 1.0)
+	$VBox.add_child(_summary_lbl)
+	$VBox.move_child(_summary_lbl, 1)   # below Header, above filter row
+
 	_build_settings_panel()
 	_fetch()
 	GameAPI.fetch_notification_prefs()
+	GameAPI.fetch_notification_summary()
 
 
 func _build_settings_panel() -> void:
@@ -103,6 +113,8 @@ func _exit_tree() -> void:
 		GameAPI.inbox_updated.disconnect(_on_inbox)
 	if GameAPI.notification_prefs_updated.is_connected(_on_prefs_updated):
 		GameAPI.notification_prefs_updated.disconnect(_on_prefs_updated)
+	if GameAPI.notification_summary_updated.is_connected(_on_notification_summary):
+		GameAPI.notification_summary_updated.disconnect(_on_notification_summary)
 
 
 func _on_prefs_updated(prefs: Array) -> void:
@@ -114,6 +126,27 @@ func _on_prefs_updated(prefs: Array) -> void:
 		if et in _pref_checkboxes:
 			var cb: CheckBox = _pref_checkboxes[et]
 			cb.set_pressed_no_signal(not muted)
+
+
+func _on_notification_summary(data: Dictionary) -> void:
+	if _summary_lbl == null or not is_instance_valid(_summary_lbl):
+		return
+	var total: int  = int(data.get("total",  0))
+	var unread: int = int(data.get("unread", 0))
+	var by_type: Array = data.get("by_type", []) as Array
+	if total == 0:
+		_summary_lbl.text = "No notifications yet."
+		return
+	var top3 := by_type.slice(0, 3)
+	var parts: Array[String] = []
+	for entry in top3:
+		if not entry is Dictionary:
+			continue
+		var et: String  = str(entry.get("event_type", "?"))
+		var cnt: int    = int(entry.get("total", 0))
+		var label: String = _EVENT_LABELS.get(et, et.capitalize())
+		parts.append("%s ×%d" % [label, cnt])
+	_summary_lbl.text = "📊 %d total · %d unread   %s" % [total, unread, "  ".join(parts)]
 
 
 func _fetch() -> void:
@@ -130,6 +163,7 @@ func _on_ack_all() -> void:
 	GameAPI.ack_all_notifications()
 	await get_tree().create_timer(0.3).timeout
 	_fetch()
+	GameAPI.fetch_notification_summary()
 
 
 func _on_inbox(entries: Array) -> void:
