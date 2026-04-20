@@ -94,6 +94,7 @@ signal player_journal_updated(entries: Array)
 signal slot_recommendations_updated(data: Array)
 signal inventory_value_summary_updated(data: Dictionary)
 signal mastery_updated(entries: Array)
+signal player_timeline_updated(entries: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -384,6 +385,15 @@ func fetch_mastery() -> void:
 			mastery_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /player/mastery response not an Array")
+	)
+
+
+func fetch_player_timeline(limit: int = 30) -> void:
+	_http_get("/player/timeline?limit=%d" % limit, func(data) -> void:
+		if data is Array:
+			player_timeline_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /player/timeline response not an Array")
 	)
 
 

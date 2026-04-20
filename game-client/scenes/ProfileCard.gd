@@ -233,17 +233,26 @@ func _ready() -> void:
 			login_badge.text = ""
 	)
 
-	# Journal button: navigates to player event timeline
+	# Journal + Timeline nav buttons
+	var nav_row := HBoxContainer.new()
 	var journal_btn := Button.new()
 	journal_btn.text = "Journal →"
 	journal_btn.add_theme_font_size_override("font_size", 11)
 	journal_btn.pressed.connect(func() -> void:
 		get_tree().change_scene_to_file("res://scenes/PlayerJournal.tscn")
 	)
-	$VBox.add_child(journal_btn)
+	var timeline_btn := Button.new()
+	timeline_btn.text = "Timeline →"
+	timeline_btn.add_theme_font_size_override("font_size", 11)
+	timeline_btn.pressed.connect(func() -> void:
+		get_tree().change_scene_to_file("res://scenes/PlayerTimeline.tscn")
+	)
+	nav_row.add_child(journal_btn)
+	nav_row.add_child(timeline_btn)
+	$VBox.add_child(nav_row)
 	var login_badge_node = $VBox.get_node_or_null("LoginStreakBadge")
 	if login_badge_node != null:
-		$VBox.move_child(journal_btn, login_badge_node.get_index() + 1)
+		$VBox.move_child(nav_row, login_badge_node.get_index() + 1)
 
 	GameAPI.fetch_profile()
 	GameAPI.fetch_pinned_achievements()

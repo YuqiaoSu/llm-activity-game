@@ -810,6 +810,71 @@ def get_player_journal(
     return result
 
 
+_TIMELINE_TYPES = {
+    "level_up", "achievement_unlocked", "place_unlocked",
+    "streak_milestone", "item_drop_wishlist",
+}
+
+
+def _timeline_entry(event_type: str, payload: dict) -> dict:
+    match event_type:
+        case "level_up":
+            lv = payload.get("new_level", "?")
+            return {"title": f"Level Up → Lv.{lv}", "detail": ""}
+        case "achievement_unlocked":
+            name = payload.get("name", payload.get("achievement_id", "?"))
+            desc = payload.get("description", "")
+            return {"title": f"Achievement: {name}", "detail": desc}
+        case "place_unlocked":
+            place = payload.get("place_name", payload.get("place_id", "?"))
+            return {"title": f"Place Unlocked: {place}", "detail": payload.get("description", "")}
+        case "streak_milestone":
+            days = payload.get("milestone", payload.get("streak_days", "?"))
+            return {"title": f"Streak Milestone: Day {days}", "detail": ""}
+        case "item_drop_wishlist":
+            item = payload.get("item_name", payload.get("item_id", "?"))
+            return {"title": f"Wishlist Drop: {item}", "detail": payload.get("rarity", "")}
+        case _:
+            return {"title": event_type.replace("_", " ").title(), "detail": ""}
+
+
+@router.get("/timeline")
+def get_player_timeline(
+    request: Request,
+    limit: int = Query(default=30, ge=1, le=100),
+) -> list[dict]:
+    """Return major milestone events for the player, newest-first."""
+    import json as _json
+    db = request.app.state.db
+    placeholders = ",".join("?" * len(_TIMELINE_TYPES))
+    rows = db.execute(
+        f"""
+        SELECT event_type, payload, created_at
+        FROM pending_notifications
+        WHERE character_id='player_default'
+          AND event_type IN ({placeholders})
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (*_TIMELINE_TYPES, limit),
+    ).fetchall()
+    result = []
+    for row in rows:
+        payload: dict = {}
+        try:
+            payload = _json.loads(row["payload"] or "{}")
+        except Exception:
+            pass
+        entry = _timeline_entry(row["event_type"], payload)
+        result.append({
+            "event_type":  row["event_type"],
+            "title":       entry["title"],
+            "detail":      entry["detail"],
+            "happened_at": row["created_at"],
+        })
+    return result
+
+
 @router.get("/mastery")
 def get_mastery(request: Request) -> list[dict]:
     """Return category mastery tiers for the player, sorted by XP descending."""
