@@ -18,6 +18,11 @@ var _history_overlay: Control = null
 var _history_list: VBoxContainer = null
 var _history_title: Label = null
 
+# Slot history overlay (shared, built once)
+var _slot_hist_overlay: Control = null
+var _slot_hist_list: VBoxContainer = null
+var _slot_hist_title: Label = null
+
 # Slot recommendations: {slot_id → {item_name, item_rarity}}
 var _slot_recommendations: Dictionary = {}
 var _last_places: Array = []
@@ -36,7 +41,9 @@ func _ready() -> void:
 	GameAPI.place_xp_invested.connect(_on_xp_invested)
 	GameAPI.place_history_updated.connect(_on_place_history)
 	GameAPI.slot_recommendations_updated.connect(_on_slot_recommendations)
+	GameAPI.slot_history_updated.connect(_on_slot_history)
 	_build_history_overlay()
+	_build_slot_hist_overlay()
 	GameAPI.fetch_places()
 	GameAPI.fetch_place_leaderboard()
 	# Pre-load inventory so the slot picker is ready without a round-trip delay
@@ -58,6 +65,8 @@ func _exit_tree() -> void:
 		GameAPI.place_history_updated.disconnect(_on_place_history)
 	if GameAPI.slot_recommendations_updated.is_connected(_on_slot_recommendations):
 		GameAPI.slot_recommendations_updated.disconnect(_on_slot_recommendations)
+	if GameAPI.slot_history_updated.is_connected(_on_slot_history):
+		GameAPI.slot_history_updated.disconnect(_on_slot_history)
 
 
 func _on_inventory_cache(items: Array) -> void:
@@ -359,6 +368,17 @@ func _make_card(place: Dictionary) -> Control:
 		)
 		vbox.add_child(hist_btn)
 
+		var slot_log_btn := Button.new()
+		slot_log_btn.text = "Slot Log →"
+		slot_log_btn.add_theme_font_size_override("font_size", 10)
+		var sl_pid: String  = hist_pid
+		var sl_name: String = hist_name
+		slot_log_btn.pressed.connect(func() -> void:
+			_slot_hist_title.text = "%s — Slot Log" % sl_name
+			GameAPI.fetch_slot_history(sl_pid, 50)
+		)
+		vbox.add_child(slot_log_btn)
+
 	# ── place level / XP (only for unlocked places) ─────────────────────────
 	if unlocked:
 		var place_level: int  = place.get("level", 1) as int
@@ -615,6 +635,93 @@ func _populate_picker(picker: VBoxContainer, place_id: String, slot_id: String, 
 		else:
 			lbl.text = "  (no unplaced items available)"
 		picker.add_child(lbl)
+
+
+func _build_slot_hist_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+	_slot_hist_overlay = overlay
+	add_child(overlay)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(380, 300)
+	overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	var header_row := HBoxContainer.new()
+	vbox.add_child(header_row)
+
+	_slot_hist_title = Label.new()
+	_slot_hist_title.text = "Slot Log"
+	_slot_hist_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_slot_hist_title.add_theme_font_size_override("font_size", 14)
+	header_row.add_child(_slot_hist_title)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	header_row.add_child(close_btn)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 240)
+	vbox.add_child(scroll)
+
+	_slot_hist_list = VBoxContainer.new()
+	_slot_hist_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_slot_hist_list)
+
+
+func _on_slot_history(entries: Array) -> void:
+	for child in _slot_hist_list.get_children():
+		child.queue_free()
+
+	if entries.is_empty():
+		var lbl := Label.new()
+		lbl.text = "  No slot assignments yet."
+		lbl.modulate = Color(0.6, 0.6, 0.6)
+		_slot_hist_list.add_child(lbl)
+		_slot_hist_overlay.visible = true
+		return
+
+	for raw in entries:
+		if not raw is Dictionary:
+			continue
+		var entry := raw as Dictionary
+		var action: String = str(entry.get("action", "?"))
+		var item_id: String = str(entry.get("item_id", "")) if entry.get("item_id") != null else "—"
+		var ts: String = str(entry.get("occurred_at", "")).left(16).replace("T", " ")
+
+		var row := HBoxContainer.new()
+
+		var act_lbl := Label.new()
+		var col := Color(0.4, 1.0, 0.5) if action == "assigned" else Color(1.0, 0.5, 0.4)
+		act_lbl.text = action.capitalize()
+		act_lbl.custom_minimum_size.x = 80
+		act_lbl.modulate = col
+		act_lbl.add_theme_font_size_override("font_size", 11)
+
+		var item_lbl := Label.new()
+		item_lbl.text = item_id
+		item_lbl.custom_minimum_size.x = 120
+		item_lbl.add_theme_font_size_override("font_size", 11)
+		item_lbl.clip_text = true
+
+		var ts_lbl := Label.new()
+		ts_lbl.text = ts
+		ts_lbl.modulate = Color(0.5, 0.5, 0.5)
+		ts_lbl.add_theme_font_size_override("font_size", 10)
+
+		row.add_child(act_lbl)
+		row.add_child(item_lbl)
+		row.add_child(ts_lbl)
+		_slot_hist_list.add_child(row)
+
+	_slot_hist_overlay.visible = true
 
 
 func _format_effects(effects: Array) -> String:

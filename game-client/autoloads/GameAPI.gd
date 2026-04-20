@@ -99,6 +99,7 @@ signal inventory_age_histogram_updated(data: Array)
 signal goal_stats_updated(data: Dictionary)
 signal upgrade_cost_updated(data: Dictionary)
 signal notification_summary_updated(data: Dictionary)
+signal slot_history_updated(entries: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -420,6 +421,17 @@ func fetch_notification_summary() -> void:
 				notification_summary_updated.emit(data as Dictionary)
 			else:
 				push_error("GameAPI: /notifications/summary response not a Dictionary")
+	)
+
+
+func fetch_slot_history(place_id: String, limit: int = 50) -> void:
+	_http_get(
+		"/places/%s/slot-history?limit=%d" % [place_id, limit],
+		func(data) -> void:
+			if data is Array:
+				slot_history_updated.emit(data as Array)
+			else:
+				push_error("GameAPI: /places/*/slot-history response not an Array")
 	)
 
 

@@ -21,6 +21,31 @@ def _log_place_activity(db, place_id: str, action: str, amount: int = 0) -> None
     )
 
 
+def _log_slot_assignment(
+    db,
+    place_id: str,
+    slot_id: str,
+    action: str,
+    item_id: str | None = None,
+    instance_id: str | None = None,
+) -> None:
+    """Append one row to slot_assignment_log. Caller is responsible for commit."""
+    db.execute(
+        "INSERT INTO slot_assignment_log"
+        " (log_id, place_id, slot_id, action, item_id, instance_id, occurred_at)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            str(uuid.uuid4()),
+            place_id,
+            slot_id,
+            action,
+            item_id,
+            instance_id,
+            datetime.now(timezone.utc).isoformat(),
+        ),
+    )
+
+
 _MIN_PLACE_LEVEL_FOR_DONATION = 5
 _DEFAULT_BOOST_FACTOR = 0.10   # 10% additive XP multiplier per donated item
 
@@ -364,6 +389,22 @@ def assign_slot(place_id: str, slot_id: str, body: SlotAssignBody, request: Requ
         "UPDATE place_slots SET occupant_id=? WHERE slot_id=?",
         (body.instance_id, slot_id),
     )
+
+    # Log the previous occupant removal (if any)
+    if prev_occupant is not None:
+        _log_slot_assignment(db, place_id, slot_id, "removed")
+
+    # Log the new assignment (if any)
+    if body.instance_id is not None:
+        item_id_row = db.execute(
+            "SELECT item_id FROM inventory WHERE instance_id=?", (body.instance_id,)
+        ).fetchone()
+        _log_slot_assignment(
+            db, place_id, slot_id, "assigned",
+            item_id=item_id_row["item_id"] if item_id_row else None,
+            instance_id=body.instance_id,
+        )
+
     db.commit()
 
     # Rebuild active effects and return updated place
@@ -378,6 +419,36 @@ _INVEST_PLAYER = "player_default"
 
 class InvestBody(BaseModel):
     xp: int = Field(..., ge=1, description="XP to donate to this place (min 1)")
+
+
+@router.get("/{place_id}/slot-history")
+def get_slot_history(
+    place_id: str,
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[dict]:
+    """Return the assignment audit trail for all slots of a place, newest-first.
+
+    Each entry: {log_id, slot_id, action, item_id, instance_id, occurred_at}.
+    Returns 404 if the place does not exist.
+    """
+    db = request.app.state.db
+    place_row = db.execute(
+        "SELECT place_id FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    rows = db.execute(
+        """
+        SELECT log_id, slot_id, action, item_id, instance_id, occurred_at
+        FROM slot_assignment_log
+        WHERE place_id=?
+        ORDER BY occurred_at DESC
+        LIMIT ?
+        """,
+        (place_id, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
 
 
 @router.post("/{place_id}/invest")

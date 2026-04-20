@@ -98,6 +98,17 @@ CREATE TABLE IF NOT EXISTS place_slots (
     metadata     TEXT NOT NULL DEFAULT '{}'
 );
 
+-- slot_assignment_log: audit trail of items assigned to / removed from place slots
+CREATE TABLE IF NOT EXISTS slot_assignment_log (
+    log_id       TEXT PRIMARY KEY,
+    place_id     TEXT NOT NULL,
+    slot_id      TEXT NOT NULL,
+    action       TEXT NOT NULL,   -- 'assigned' | 'removed'
+    item_id      TEXT,            -- NULL when action='removed'
+    instance_id  TEXT,            -- NULL when action='removed'
+    occurred_at  TEXT NOT NULL
+);
+
 -- chunk_log: one row per processed tracker chunk — used for activity history screen
 CREATE TABLE IF NOT EXISTS chunk_log (
     log_id        TEXT PRIMARY KEY,
