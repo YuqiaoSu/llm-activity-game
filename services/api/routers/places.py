@@ -181,11 +181,14 @@ _RARITY_RANK = {"COMMON": 1, "UNCOMMON": 2, "RARE": 3, "EPIC": 4, "LEGENDARY": 5
 
 
 @router.get("/{place_id}/slot-recommend")
-def get_slot_recommendations(place_id: str, request: Request) -> list[dict]:
+def get_slot_recommendations(
+    place_id: str, request: Request, locked_only: bool = False
+) -> list[dict]:
     """Return the best available unplaced item for each empty slot at this place.
 
     Scoring: category_match (0 or 10) + rarity_rank (1-5).
     Returns an empty list when all slots are filled or inventory is empty.
+    When locked_only=true, only locked items are considered as candidates.
     """
     db = request.app.state.db
     place = db.execute("SELECT place_id FROM places WHERE place_id=?", (place_id,)).fetchone()
@@ -201,13 +204,15 @@ def get_slot_recommendations(place_id: str, request: Request) -> list[dict]:
     if not empty_slots:
         return []
 
-    # Load all unplaced inventory items with their item data
+    # Load unplaced inventory items; optionally restrict to locked items
+    locked_clause = "AND i.locked = 1" if locked_only else ""
     inv_rows = db.execute(
-        """
+        f"""
         SELECT i.instance_id,
                json_extract(d.data, '$.name')   AS item_name,
                json_extract(d.data, '$.rarity') AS rarity,
-               json_extract(d.data, '$.category') AS category
+               json_extract(d.data, '$.category') AS category,
+               i.locked
         FROM inventory i
         JOIN item_definitions d ON d.item_id = i.item_id
         WHERE i.character_id = 'player_default'
@@ -215,6 +220,7 @@ def get_slot_recommendations(place_id: str, request: Request) -> list[dict]:
           AND i.instance_id NOT IN (
               SELECT occupant_id FROM place_slots WHERE occupant_id IS NOT NULL
           )
+          {locked_clause}
         """,
     ).fetchall()
     if not inv_rows:
@@ -310,12 +316,28 @@ def _add_preferred_category(place_dicts: list[dict]) -> list[dict]:
     return place_dicts
 
 
+def _add_days_since_visit(place_dicts: list[dict]) -> list[dict]:
+    today = date_type.today().isoformat()
+    for p in place_dicts:
+        lv = p.get("last_visit_date")
+        if lv:
+            try:
+                delta = date_type.fromisoformat(today) - date_type.fromisoformat(lv)
+                p["days_since_visit"] = delta.days
+            except ValueError:
+                p["days_since_visit"] = None
+        else:
+            p["days_since_visit"] = None
+    return place_dicts
+
+
 @router.get("")
 def get_places(request: Request) -> list[dict]:
     db = request.app.state.db
     dicts = [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
     _add_set_bonus_flag(db, dicts)
     _add_preferred_category(dicts)
+    _add_days_since_visit(dicts)
     return _add_perks(db, dicts)
 
 

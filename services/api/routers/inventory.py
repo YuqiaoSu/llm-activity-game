@@ -1124,22 +1124,34 @@ def get_expiring_items(
     ]
 
 
+_VALID_CRAFTING_ACTIONS = {"upgrade", "craft"}
+
+
 @router.get("/crafting-history")
 def get_crafting_history(
     request: Request,
     limit: int = Query(default=20, ge=1, le=100),
+    action: str | None = Query(default=None),
 ) -> list[dict]:
-    """Return the player's crafting/upgrade history, newest first."""
+    """Return the player's crafting/upgrade history, newest first.
+
+    Optional `action` filter: 'upgrade' or 'craft'.
+    """
+    if action is not None and action not in _VALID_CRAFTING_ACTIONS:
+        raise HTTPException(status_code=422, detail=f"action must be one of {sorted(_VALID_CRAFTING_ACTIONS)}")
     db = request.app.state.db
+    action_clause = "AND action = ?" if action else ""
+    params: tuple = (limit,) if action is None else (action, limit)
     rows = db.execute(
-        """
+        f"""
         SELECT log_id, action, source_ids, result_item_id, result_rarity, happened_at
         FROM crafting_log
         WHERE player_id = 'player_default'
+          {action_clause}
         ORDER BY happened_at DESC
         LIMIT ?
         """,
-        (limit,),
+        params,
     ).fetchall()
     return [
         {

@@ -422,6 +422,15 @@ func _make_card(place: Dictionary) -> Control:
 			streak_lbl.text = "🔥 %d-day visit streak" % streak_days
 			vbox.add_child(streak_lbl)
 
+		# Dormancy warning — shown when not visited for 7+ days
+		var dsv = place.get("days_since_visit")
+		if dsv != null and (dsv as int) >= 7:
+			var warn_lbl := Label.new()
+			warn_lbl.add_theme_font_size_override("font_size", 10)
+			warn_lbl.modulate = Color(1.0, 0.55, 0.1)
+			warn_lbl.text = "⚠ Not visited in %d days" % (dsv as int)
+			vbox.add_child(warn_lbl)
+
 		var slot_log_btn := Button.new()
 		slot_log_btn.text = "Slot Log →"
 		slot_log_btn.add_theme_font_size_override("font_size", 10)
