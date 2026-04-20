@@ -49,6 +49,8 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     _safe_add_column(conn, "inventory", "durability", "INTEGER NOT NULL DEFAULT 100")
     # Item lock flag — prevents accidental sell/discard/bulk-sell
     _safe_add_column(conn, "inventory", "locked", "INTEGER NOT NULL DEFAULT 0")
+    # Goal difficulty manual override (1.0 = auto; 0.5–2.0 allowed)
+    _safe_add_column(conn, "player_settings", "goal_difficulty_scale", "REAL NOT NULL DEFAULT 1.0")
     # Daily place XP investment cap tracking
     conn.execute(
         """

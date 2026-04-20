@@ -89,13 +89,21 @@ def _check_earned(db: sqlite3.Connection, criteria: str) -> bool:
 
 
 class _SettingsBody(BaseModel):
-    daily_xp_target: int
+    daily_xp_target: int | None = None
+    goal_difficulty_scale: float | None = None
 
     @field_validator("daily_xp_target")
     @classmethod
-    def validate_target(cls, v: int) -> int:
-        if v < 1 or v > 10000:
+    def validate_target(cls, v: int | None) -> int | None:
+        if v is not None and (v < 1 or v > 10000):
             raise ValueError("daily_xp_target must be between 1 and 10000")
+        return v
+
+    @field_validator("goal_difficulty_scale")
+    @classmethod
+    def validate_scale(cls, v: float | None) -> float | None:
+        if v is not None and (v < 0.5 or v > 2.0):
+            raise ValueError("goal_difficulty_scale must be between 0.5 and 2.0")
         return v
 
 
@@ -104,21 +112,30 @@ def get_player_settings(request: Request) -> dict:
     """Return the player's personal settings (daily XP target etc.)."""
     db = request.app.state.db
     row = db.execute(
-        "SELECT daily_xp_target FROM player_settings WHERE player_id='player_default'"
+        "SELECT daily_xp_target, goal_difficulty_scale FROM player_settings WHERE player_id='player_default'"
     ).fetchone()
-    return {"daily_xp_target": row["daily_xp_target"] if row else 100}
+    return {
+        "daily_xp_target": row["daily_xp_target"] if row else 100,
+        "goal_difficulty_scale": float(row["goal_difficulty_scale"]) if row else 1.0,
+    }
 
 
 @router.patch("/settings")
 def patch_player_settings(body: _SettingsBody, request: Request) -> dict:
-    """Update the player's personal settings."""
+    """Update the player's personal settings (partial update — only provided fields change)."""
     db = request.app.state.db
+    current = db.execute(
+        "SELECT daily_xp_target, goal_difficulty_scale FROM player_settings WHERE player_id='player_default'"
+    ).fetchone()
+    xp_target = body.daily_xp_target if body.daily_xp_target is not None else (current["daily_xp_target"] if current else 100)
+    scale = body.goal_difficulty_scale if body.goal_difficulty_scale is not None else (float(current["goal_difficulty_scale"]) if current else 1.0)
     db.execute(
-        "INSERT OR REPLACE INTO player_settings (player_id, daily_xp_target) VALUES ('player_default', ?)",
-        (body.daily_xp_target,),
+        "INSERT OR REPLACE INTO player_settings (player_id, daily_xp_target, goal_difficulty_scale)"
+        " VALUES ('player_default', ?, ?)",
+        (xp_target, scale),
     )
     db.commit()
-    return {"daily_xp_target": body.daily_xp_target}
+    return {"daily_xp_target": xp_target, "goal_difficulty_scale": scale}
 
 
 _LUCK_BASE_COST = 50   # XP cost to upgrade luck from level 5→6

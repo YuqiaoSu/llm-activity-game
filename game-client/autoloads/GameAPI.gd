@@ -182,8 +182,8 @@ func fetch_player_settings() -> void:
     )
 
 
-func patch_player_settings(xp_target: int) -> void:
-    var body := JSON.stringify({"daily_xp_target": xp_target})
+func patch_player_settings(fields: Dictionary) -> void:
+    var body := JSON.stringify(fields)
     _http_patch("/player/settings", body, func(code: int, data: Dictionary) -> void:
         if code == 200:
             player_settings_updated.emit(data)

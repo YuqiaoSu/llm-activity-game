@@ -29,6 +29,36 @@ func _ready() -> void:
 		GameAPI.claim_streak_reward()
 	)
 	_claim_btn.visible = false
+
+	# Difficulty scale row: SpinBox + "Set" button
+	var diff_row := HBoxContainer.new()
+	var diff_lbl := Label.new()
+	diff_lbl.text = "Difficulty ×"
+	diff_lbl.add_theme_font_size_override("font_size", 11)
+	var diff_spin := SpinBox.new()
+	diff_spin.min_value = 0.5
+	diff_spin.max_value = 2.0
+	diff_spin.step = 0.1
+	diff_spin.value = 1.0
+	diff_spin.suffix = ""
+	diff_spin.custom_minimum_size = Vector2(90, 0)
+	var diff_set_btn := Button.new()
+	diff_set_btn.text = "Set"
+	diff_set_btn.add_theme_font_size_override("font_size", 10)
+	diff_set_btn.pressed.connect(func() -> void:
+		GameAPI.patch_player_settings({"goal_difficulty_scale": diff_spin.value})
+	)
+	diff_row.add_child(diff_lbl)
+	diff_row.add_child(diff_spin)
+	diff_row.add_child(diff_set_btn)
+	$VBox.add_child(diff_row)
+	$VBox.move_child(diff_row, _claim_btn.get_index() + 1)
+
+	GameAPI.player_settings_updated.connect(func(d: Dictionary) -> void:
+		var scale: float = d.get("goal_difficulty_scale", 1.0) as float
+		diff_spin.value = scale
+	)
+	GameAPI.fetch_player_settings()
 	GameAPI.fetch_daily_goals()
 	GameAPI.fetch_goal_streak()
 

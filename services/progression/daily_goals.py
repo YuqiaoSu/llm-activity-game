@@ -62,6 +62,13 @@ def ensure_daily_goals(conn: sqlite3.Connection, player_id: str = "player_defaul
     goal_streak: int = int(streak_row["goal_streak"]) if streak_row else 0
     difficulty_mult = compute_goal_difficulty_multiplier(goal_streak)
 
+    # Apply manual override scale from player_settings (default 1.0 = no change)
+    settings_row = conn.execute(
+        "SELECT goal_difficulty_scale FROM player_settings WHERE player_id='player_default'"
+    ).fetchone()
+    if settings_row and settings_row["goal_difficulty_scale"] is not None:
+        difficulty_mult *= float(settings_row["goal_difficulty_scale"])
+
     suggestions = get_suggestions(conn, player_id)
     now = datetime.now(timezone.utc).isoformat()
     added = 0
