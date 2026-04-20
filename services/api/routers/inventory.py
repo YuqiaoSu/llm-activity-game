@@ -695,6 +695,48 @@ def get_value_summary(request: Request) -> dict:
     }
 
 
+_AGE_BUCKETS: list[tuple[int | None, str]] = [
+    # (max_days_exclusive, label)  — None = no upper bound
+    (8,    "0-7d"),
+    (31,   "8-30d"),
+    (91,   "31-90d"),
+    (366,  "91-365d"),
+    (None, "365d+"),
+]
+
+
+@router.get("/age-histogram")
+def get_age_histogram(request: Request) -> list[dict]:
+    """Return item counts and estimated value bucketed by acquisition age."""
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT
+            CAST(julianday('now') - julianday(i.acquired_at) AS INTEGER) AS age_days,
+            json_extract(d.data, '$.rarity') AS rarity
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+        """,
+    ).fetchall()
+
+    buckets: dict[str, dict] = {
+        label: {"bucket": label, "count": 0, "value_xp": 0}
+        for _, label in _AGE_BUCKETS
+    }
+    for row in rows:
+        age: int = row["age_days"] or 0
+        rarity: str = (row["rarity"] or "COMMON").upper()
+        xp = _SELL_VALUES.get(rarity, _SELL_VALUES["COMMON"])
+        for max_d, label in _AGE_BUCKETS:
+            if max_d is None or age < max_d:
+                buckets[label]["count"] += 1
+                buckets[label]["value_xp"] += xp
+                break
+
+    return [buckets[label] for _, label in _AGE_BUCKETS]
+
+
 @router.get("/recipes")
 def get_recipes(request: Request) -> list[dict]:
     """Return crafting recipe templates based on current inventory.

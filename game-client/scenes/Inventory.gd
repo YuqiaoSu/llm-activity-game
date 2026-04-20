@@ -32,6 +32,7 @@ var _filter_row: HBoxContainer
 
 # Value summary overlay
 var _value_overlay: Control = null
+var _age_overlay: Control = null
 
 
 func _ready() -> void:
@@ -74,6 +75,17 @@ func _ready() -> void:
 	$VBox/Header.add_child(value_btn)
 	_build_value_overlay()
 	GameAPI.inventory_value_summary_updated.connect(_on_value_summary)
+
+	# "Age Histogram" button
+	var age_btn := Button.new()
+	age_btn.text = "📅 Age"
+	age_btn.add_theme_font_size_override("font_size", 10)
+	age_btn.pressed.connect(func() -> void:
+		GameAPI.fetch_inventory_age_histogram()
+	)
+	$VBox/Header.add_child(age_btn)
+	_build_age_overlay()
+	GameAPI.inventory_age_histogram_updated.connect(_on_age_histogram)
 
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
@@ -121,6 +133,8 @@ func _exit_tree() -> void:
 		GameAPI.donation_completed.disconnect(_on_donation_completed)
 	if GameAPI.inventory_value_summary_updated.is_connected(_on_value_summary):
 		GameAPI.inventory_value_summary_updated.disconnect(_on_value_summary)
+	if GameAPI.inventory_age_histogram_updated.is_connected(_on_age_histogram):
+		GameAPI.inventory_age_histogram_updated.disconnect(_on_age_histogram)
 	# inventory_note_saved: connected via anonymous lambda — no disconnect needed
 
 
@@ -1023,3 +1037,91 @@ func _on_value_summary(data: Dictionary) -> void:
 
 	body_lbl.text = "\n".join(lines)
 	_value_overlay.visible = true
+
+
+func _build_age_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+	_age_overlay = overlay
+	add_child(overlay)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(300, 220)
+	overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	var header_row := HBoxContainer.new()
+	vbox.add_child(header_row)
+
+	var title := Label.new()
+	title.text = "Item Age Breakdown"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 14)
+	header_row.add_child(title)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	header_row.add_child(close_btn)
+
+	var list := VBoxContainer.new()
+	list.name = "BucketList"
+	vbox.add_child(list)
+
+
+func _on_age_histogram(buckets: Array) -> void:
+	if _age_overlay == null or not is_instance_valid(_age_overlay):
+		return
+
+	var panel := _age_overlay.get_child(0)
+	var vbox: VBoxContainer = panel.get_child(0) as VBoxContainer
+	var list: VBoxContainer = vbox.get_node("BucketList") as VBoxContainer
+
+	for child in list.get_children():
+		child.queue_free()
+
+	var max_count := 1
+	for raw in buckets:
+		var cnt: int = (raw as Dictionary).get("count", 0) as int
+		if cnt > max_count:
+			max_count = cnt
+
+	for raw in buckets:
+		if not raw is Dictionary:
+			continue
+		var b := raw as Dictionary
+		var label: String = b.get("bucket", "?")
+		var count: int    = b.get("count", 0) as int
+		var xp: int       = b.get("value_xp", 0) as int
+
+		var row := HBoxContainer.new()
+
+		var lbl := Label.new()
+		lbl.text = label
+		lbl.custom_minimum_size.x = 70
+		lbl.add_theme_font_size_override("font_size", 10)
+
+		var bar_bg := ColorRect.new()
+		bar_bg.custom_minimum_size = Vector2(100, 8)
+		bar_bg.color = Color(0.2, 0.2, 0.2)
+		var bar_fill := ColorRect.new()
+		bar_fill.custom_minimum_size = Vector2(max(2.0, float(count) / float(max_count) * 100.0), 8)
+		bar_fill.color = Color(0.35, 0.75, 1.0)
+		bar_bg.add_child(bar_fill)
+
+		var cnt_lbl := Label.new()
+		cnt_lbl.text = "  %d  (%d XP)" % [count, xp]
+		cnt_lbl.modulate = Color(0.7, 0.9, 1.0)
+		cnt_lbl.add_theme_font_size_override("font_size", 10)
+
+		row.add_child(lbl)
+		row.add_child(bar_bg)
+		row.add_child(cnt_lbl)
+		list.add_child(row)
+
+	_age_overlay.visible = true
