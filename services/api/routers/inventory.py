@@ -732,6 +732,122 @@ def get_upgrade_cost(
     }
 
 
+# One-step upgrade: source rarity that gets consumed to craft the target
+_UPGRADE_SOURCE: dict[str, str] = {
+    "UNCOMMON":  "COMMON",
+    "RARE":      "UNCOMMON",
+    "EPIC":      "RARE",
+    "LEGENDARY": "EPIC",
+}
+_UPGRADE_COST = 2   # copies of source_rarity needed per upgrade
+
+
+class _UpgradeBody(BaseModel):
+    target_rarity: str
+    category: str
+
+
+@router.post("/upgrade")
+def upgrade_item(body: _UpgradeBody, request: Request) -> dict:
+    """Craft one item of target_rarity by consuming 2 items of the tier below.
+
+    - UNCOMMON needs 2 COMMON,  RARE needs 2 UNCOMMON, etc.
+    - Items must be unplaced, non-expired, and unlocked.
+    - A random target-rarity item definition in the same category is awarded.
+    - Returns 422 for unknown rarity, 400 for COMMON target,
+      400 if fewer than 2 source items are available.
+    """
+    target = body.target_rarity.upper()
+    cat    = body.category.upper()
+    if target not in _UPGRADE_SOURCE:
+        if target == "COMMON":
+            raise HTTPException(status_code=400, detail="Cannot upgrade to COMMON")
+        raise HTTPException(status_code=422, detail=f"Unknown rarity: {body.target_rarity}")
+
+    source_rarity = _UPGRADE_SOURCE[target]
+    db = request.app.state.db
+
+    # Find _UPGRADE_COST unplaced, non-expired, unlocked source instances
+    source_instances = db.execute(
+        """
+        SELECT i.instance_id
+        FROM inventory i
+        JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
+          AND i.locked = 0
+          AND NOT EXISTS (
+              SELECT 1 FROM place_slots ps WHERE ps.occupant_id = i.instance_id
+          )
+          AND json_extract(d.data, '$.rarity')   = ?
+          AND json_extract(d.data, '$.category') = ?
+        LIMIT ?
+        """,
+        (source_rarity, cat, _UPGRADE_COST),
+    ).fetchall()
+
+    if len(source_instances) < _UPGRADE_COST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need {_UPGRADE_COST} unplaced {source_rarity} {cat} items; "
+                   f"found {len(source_instances)}",
+        )
+
+    # Pick a random target-rarity item definition in the same category
+    candidates = db.execute(
+        """
+        SELECT item_id FROM item_definitions
+        WHERE json_extract(data, '$.rarity')   = ?
+          AND json_extract(data, '$.category') = ?
+        """,
+        (target, cat),
+    ).fetchall()
+
+    if not candidates:
+        raise HTTPException(
+            status_code=500,
+            detail=f"No item definitions for rarity={target} category={cat}",
+        )
+
+    new_item_id: str = random.choice(candidates)["item_id"]
+
+    # Consume source instances
+    consumed_ids = [r["instance_id"] for r in source_instances]
+    for iid in consumed_ids:
+        db.execute("DELETE FROM inventory WHERE instance_id=?", (iid,))
+
+    # Award new item
+    new_iid = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        "INSERT INTO inventory"
+        " (instance_id, character_id, item_id, acquired_at, source_chunk)"
+        " VALUES (?, 'player_default', ?, ?, 'upgrade')",
+        (new_iid, new_item_id, now_iso),
+    )
+    db.execute(
+        "INSERT OR IGNORE INTO collection_log (player_id, item_id, first_seen_at)"
+        " VALUES ('player_default', ?, ?)",
+        (new_item_id, now_iso),
+    )
+    db.commit()
+
+    new_def = db.execute(
+        "SELECT data FROM item_definitions WHERE item_id=?", (new_item_id,)
+    ).fetchone()
+    new_item_data = json.loads(new_def["data"]) if new_def else {}
+
+    return {
+        "new_instance_id":     new_iid,
+        "new_item_id":         new_item_id,
+        "new_rarity":          target,
+        "new_category":        cat,
+        "new_item":            new_item_data,
+        "consumed_instance_ids": consumed_ids,
+        "source_rarity":       source_rarity,
+    }
+
+
 @router.get("/value-summary")
 def get_value_summary(request: Request) -> dict:
     """Return aggregate value metrics for the player's inventory."""
@@ -915,6 +1031,53 @@ def get_drop_odds(
 
     result.sort(key=lambda x: x["probability_pct"], reverse=True)
     return result
+
+
+@router.get("/expiring")
+def get_expiring_items(
+    request: Request,
+    days: int = Query(default=7, ge=1, le=365),
+) -> list[dict]:
+    """Return items that will expire within `days` days (default 7), sorted by expires_at ASC.
+
+    Each entry: {instance_id, item_id, item_name, rarity, category, expires_at, days_left}.
+    Only includes items that are not yet expired (expires_at > now).
+    """
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT
+            i.instance_id,
+            i.item_id,
+            i.expires_at,
+            json_extract(d.data, '$.name')     AS item_name,
+            json_extract(d.data, '$.rarity')   AS rarity,
+            json_extract(d.data, '$.category') AS category,
+            CAST(
+                (julianday(i.expires_at) - julianday('now')) AS INTEGER
+            ) AS days_left
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND i.expires_at IS NOT NULL
+          AND i.expires_at > datetime('now')
+          AND i.expires_at <= datetime('now', ? || ' days')
+        ORDER BY i.expires_at ASC
+        """,
+        (str(days),),
+    ).fetchall()
+    return [
+        {
+            "instance_id": r["instance_id"],
+            "item_id":     r["item_id"],
+            "item_name":   r["item_name"] or r["item_id"],
+            "rarity":      r["rarity"] or "COMMON",
+            "category":    r["category"] or "",
+            "expires_at":  r["expires_at"],
+            "days_left":   r["days_left"] if r["days_left"] is not None else 0,
+        }
+        for r in rows
+    ]
 
 
 @router.get("/sets")

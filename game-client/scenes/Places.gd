@@ -355,18 +355,38 @@ func _make_card(place: Dictionary) -> Control:
 		bonus_lbl.add_theme_font_size_override("font_size", 11)
 		vbox.add_child(bonus_lbl)
 
-	# ── history button (only for unlocked places) ───────────────────────────
+	# ── history / visit buttons (only for unlocked places) ───────────────────
 	if unlocked:
+		var hist_pid: String  = place.get("place_id", "")
+		var hist_name: String = place.get("name", hist_pid)
+
 		var hist_btn := Button.new()
 		hist_btn.text = "History →"
 		hist_btn.add_theme_font_size_override("font_size", 10)
-		var hist_pid: String = place.get("place_id", "")
-		var hist_name: String = place.get("name", hist_pid)
 		hist_btn.pressed.connect(func() -> void:
 			_history_title.text = "%s — History" % hist_name
 			GameAPI.fetch_place_history(hist_pid, 10)
 		)
 		vbox.add_child(hist_btn)
+
+		# Record visit and show last-visited on first expand
+		var last_visited_lbl := Label.new()
+		last_visited_lbl.add_theme_font_size_override("font_size", 10)
+		last_visited_lbl.modulate = Color(0.55, 0.55, 0.55)
+		last_visited_lbl.text = "Tap to record visit"
+		vbox.add_child(last_visited_lbl)
+		var _lv_lbl := last_visited_lbl
+		var _lv_pid := hist_pid
+		GameAPI.place_visits_updated.connect(func(entries: Array) -> void:
+			if entries.is_empty():
+				_lv_lbl.text = "Never visited"
+				return
+			var latest: Dictionary = entries[0] as Dictionary
+			var ts: String = str(latest.get("visited_at", "")).left(16).replace("T", " ")
+			_lv_lbl.text = "Last visited: %s" % ts
+		)
+		GameAPI.record_place_visit(_lv_pid)
+		GameAPI.fetch_place_visits(_lv_pid, 1)
 
 		var slot_log_btn := Button.new()
 		slot_log_btn.text = "Slot Log →"

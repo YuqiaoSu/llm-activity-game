@@ -421,6 +421,52 @@ class InvestBody(BaseModel):
     xp: int = Field(..., ge=1, description="XP to donate to this place (min 1)")
 
 
+@router.post("/{place_id}/visit")
+def record_visit(place_id: str, request: Request) -> dict:
+    """Record that the player visited (opened) this place. Idempotent — always appends.
+
+    Returns 404 if the place does not exist.
+    """
+    db = request.app.state.db
+    place_row = db.execute(
+        "SELECT place_id FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    log_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        "INSERT INTO place_visit_log (log_id, place_id, visited_at) VALUES (?, ?, ?)",
+        (log_id, place_id, now_iso),
+    )
+    db.commit()
+    return {"log_id": log_id, "place_id": place_id, "visited_at": now_iso}
+
+
+@router.get("/{place_id}/visits")
+def get_visits(
+    place_id: str,
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[dict]:
+    """Return visit history for a place, newest-first.
+
+    Returns 404 if the place does not exist.
+    """
+    db = request.app.state.db
+    place_row = db.execute(
+        "SELECT place_id FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+    rows = db.execute(
+        "SELECT log_id, place_id, visited_at FROM place_visit_log"
+        " WHERE place_id=? ORDER BY visited_at DESC LIMIT ?",
+        (place_id, limit),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 @router.get("/{place_id}/slot-history")
 def get_slot_history(
     place_id: str,

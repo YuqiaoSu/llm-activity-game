@@ -98,6 +98,13 @@ CREATE TABLE IF NOT EXISTS place_slots (
     metadata     TEXT NOT NULL DEFAULT '{}'
 );
 
+-- place_visit_log: records each time the player opens a place's detail view
+CREATE TABLE IF NOT EXISTS place_visit_log (
+    log_id     TEXT PRIMARY KEY,
+    place_id   TEXT NOT NULL,
+    visited_at TEXT NOT NULL
+);
+
 -- slot_assignment_log: audit trail of items assigned to / removed from place slots
 CREATE TABLE IF NOT EXISTS slot_assignment_log (
     log_id       TEXT PRIMARY KEY,

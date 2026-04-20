@@ -98,8 +98,12 @@ signal player_timeline_updated(entries: Array)
 signal inventory_age_histogram_updated(data: Array)
 signal goal_stats_updated(data: Dictionary)
 signal upgrade_cost_updated(data: Dictionary)
+signal upgrade_crafted(data: Dictionary)
 signal notification_summary_updated(data: Dictionary)
 signal slot_history_updated(entries: Array)
+signal place_visit_recorded(data: Dictionary)
+signal place_visits_updated(entries: Array)
+signal expiring_items_updated(entries: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -413,6 +417,20 @@ func fetch_upgrade_cost(target_rarity: String, category: String) -> void:
 	)
 
 
+func craft_upgrade(target_rarity: String, category: String) -> void:
+	var body := JSON.stringify({"target_rarity": target_rarity, "category": category})
+	_http_post(
+		"/inventory/upgrade",
+		func(code: int, data: Dictionary) -> void:
+			if code == 200:
+				upgrade_crafted.emit(data)
+				fetch_inventory()
+			else:
+				push_error("GameAPI: craft_upgrade → %d" % code),
+		body,
+	)
+
+
 func fetch_notification_summary() -> void:
 	_http_get(
 		"/notifications/summary",
@@ -432,6 +450,37 @@ func fetch_slot_history(place_id: String, limit: int = 50) -> void:
 				slot_history_updated.emit(data as Array)
 			else:
 				push_error("GameAPI: /places/*/slot-history response not an Array")
+	)
+
+
+func record_place_visit(place_id: String) -> void:
+	_http_post(
+		"/places/%s/visit" % place_id,
+		func(code: int, data: Dictionary) -> void:
+			if code == 200:
+				place_visit_recorded.emit(data)
+			else:
+				push_error("GameAPI: record_place_visit %s → %d" % [place_id, code])
+	)
+
+
+func fetch_place_visits(place_id: String, limit: int = 20) -> void:
+	_http_get(
+		"/places/%s/visits?limit=%d" % [place_id, limit],
+		func(data) -> void:
+			if data is Array:
+				place_visits_updated.emit(data as Array)
+			else:
+				push_error("GameAPI: /places/*/visits response not an Array")
+	)
+
+
+func fetch_expiring_items(days: int = 7) -> void:
+	_http_get("/inventory/expiring?days=%d" % days, func(data) -> void:
+		if data is Array:
+			expiring_items_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory/expiring response not an Array")
 	)
 
 

@@ -34,6 +34,11 @@ var _filter_row: HBoxContainer
 var _value_overlay: Control = null
 var _age_overlay: Control = null
 var _upgrade_overlay: Control = null
+var _upgrade_rarity_opt: OptionButton = null
+var _upgrade_cat_opt: OptionButton = null
+var _expiry_badge: Button = null
+var _expiry_overlay: Control = null
+var _expiry_list: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -99,6 +104,20 @@ func _ready() -> void:
 	$VBox/Header.add_child(upgrade_btn)
 	_build_upgrade_overlay()
 	GameAPI.upgrade_cost_updated.connect(_on_upgrade_cost)
+	GameAPI.upgrade_crafted.connect(_on_upgrade_crafted)
+
+	# Expiry warning badge (hidden until data arrives)
+	_expiry_badge = Button.new()
+	_expiry_badge.text = "⚠ 0 expiring"
+	_expiry_badge.add_theme_font_size_override("font_size", 10)
+	_expiry_badge.visible = false
+	_expiry_badge.pressed.connect(func() -> void:
+		if _expiry_overlay != null and is_instance_valid(_expiry_overlay):
+			_expiry_overlay.visible = true
+	)
+	$VBox/Header.add_child(_expiry_badge)
+	_build_expiry_overlay()
+	GameAPI.expiring_items_updated.connect(_on_expiring_items)
 
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
@@ -124,6 +143,7 @@ func _ready() -> void:
 	vbox.move_child(_filter_row, 1)
 
 	GameAPI.fetch_inventory()
+	GameAPI.fetch_expiring_items()
 	GameAPI.fetch_places()  # needed for quick-assign slot picker
 
 
@@ -150,6 +170,10 @@ func _exit_tree() -> void:
 		GameAPI.inventory_age_histogram_updated.disconnect(_on_age_histogram)
 	if GameAPI.upgrade_cost_updated.is_connected(_on_upgrade_cost):
 		GameAPI.upgrade_cost_updated.disconnect(_on_upgrade_cost)
+	if GameAPI.upgrade_crafted.is_connected(_on_upgrade_crafted):
+		GameAPI.upgrade_crafted.disconnect(_on_upgrade_crafted)
+	if GameAPI.expiring_items_updated.is_connected(_on_expiring_items):
+		GameAPI.expiring_items_updated.disconnect(_on_expiring_items)
 	# inventory_note_saved: connected via anonymous lambda — no disconnect needed
 
 
@@ -1181,12 +1205,14 @@ func _build_upgrade_overlay() -> void:
 	for r in ["UNCOMMON", "RARE", "EPIC", "LEGENDARY"]:
 		rarity_opt.add_item(r)
 	pickers_row.add_child(rarity_opt)
+	_upgrade_rarity_opt = rarity_opt
 
 	var cat_opt := OptionButton.new()
 	cat_opt.name = "CategoryOption"
 	for c in ["WORK", "LEARN", "PLAY", "REST", "SOCIAL", "CREATE"]:
 		cat_opt.add_item(c)
 	pickers_row.add_child(cat_opt)
+	_upgrade_cat_opt = cat_opt
 
 	var check_btn := Button.new()
 	check_btn.text = "Check"
@@ -1205,6 +1231,19 @@ func _build_upgrade_overlay() -> void:
 	result_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
 	vbox.add_child(result_lbl)
 
+	var craft_btn := Button.new()
+	craft_btn.name = "CraftButton"
+	craft_btn.text = "Craft ▶"
+	craft_btn.disabled = true
+	craft_btn.pressed.connect(func() -> void:
+		if _upgrade_rarity_opt == null or _upgrade_cat_opt == null:
+			return
+		var r: String = _upgrade_rarity_opt.get_item_text(_upgrade_rarity_opt.selected)
+		var c: String = _upgrade_cat_opt.get_item_text(_upgrade_cat_opt.selected)
+		GameAPI.craft_upgrade(r, c)
+	)
+	vbox.add_child(craft_btn)
+
 
 func _on_upgrade_cost(data: Dictionary) -> void:
 	if _upgrade_overlay == null or not is_instance_valid(_upgrade_overlay):
@@ -1212,6 +1251,7 @@ func _on_upgrade_cost(data: Dictionary) -> void:
 	var panel := _upgrade_overlay.get_child(0)
 	var vbox: VBoxContainer = panel.get_child(0) as VBoxContainer
 	var result_lbl: Label = vbox.get_node("ResultLabel") as Label
+	var craft_btn: Button = vbox.get_node("CraftButton") as Button
 
 	var target: String  = str(data.get("target_rarity", "?")).capitalize()
 	var cat: String     = str(data.get("category", "?")).capitalize()
@@ -1222,9 +1262,86 @@ func _on_upgrade_cost(data: Dictionary) -> void:
 
 	if needed == 0:
 		result_lbl.text = "Already at maximum rarity — no crafting needed."
+		if craft_btn:
+			craft_btn.disabled = true
 	elif shortfall == 0:
 		result_lbl.text = "%s %s: needs %d COMMON items — you have %d. Ready to craft!" \
 			% [cat, target, needed, owned]
+		if craft_btn:
+			craft_btn.disabled = false
 	else:
 		result_lbl.text = "%s %s: needs %d COMMON items.\nYou own %d → shortfall %d (%d XP to buy)." \
 			% [cat, target, needed, owned, shortfall, xp_eq]
+		if craft_btn:
+			craft_btn.disabled = true
+
+
+func _on_upgrade_crafted(data: Dictionary) -> void:
+	var item_name: String = str(data.get("new_item", {}).get("name", data.get("new_item_id", "?")))
+	var rarity: String    = str(data.get("new_rarity", "?"))
+	if _upgrade_overlay != null and is_instance_valid(_upgrade_overlay):
+		var panel := _upgrade_overlay.get_child(0)
+		var vbox: VBoxContainer = panel.get_child(0) as VBoxContainer
+		var result_lbl: Label = vbox.get_node("ResultLabel") as Label
+		if result_lbl:
+			result_lbl.text = "Crafted! Received: %s [%s]" % [item_name, rarity]
+		var craft_btn: Button = vbox.get_node("CraftButton") as Button
+		if craft_btn:
+			craft_btn.disabled = true
+
+
+func _build_expiry_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(360, 300)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+
+	var title := Label.new()
+	title.text = "Items Expiring Soon"
+	title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(title)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(340, 200)
+	_expiry_list = VBoxContainer.new()
+	_expiry_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_expiry_list)
+	vbox.add_child(scroll)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	vbox.add_child(close_btn)
+
+	panel.add_child(vbox)
+	overlay.add_child(panel)
+	add_child(overlay)
+	_expiry_overlay = overlay
+
+
+func _on_expiring_items(entries: Array) -> void:
+	if _expiry_badge == null or not is_instance_valid(_expiry_badge):
+		return
+	var count := entries.size()
+	_expiry_badge.visible = count > 0
+	_expiry_badge.text = "⚠ %d expiring" % count
+
+	if _expiry_list == null or not is_instance_valid(_expiry_list):
+		return
+	for child in _expiry_list.get_children():
+		child.queue_free()
+	for entry in entries:
+		var lbl := Label.new()
+		var name_str: String = str(entry.get("item_name", entry.get("item_id", "?")))
+		var days_left: int   = int(entry.get("days_left", 0))
+		var expires_at: String = str(entry.get("expires_at", ""))
+		lbl.text = "%s — %d day(s) left (%s)" % [name_str, days_left, expires_at.left(10)]
+		lbl.add_theme_font_size_override("font_size", 11)
+		_expiry_list.add_child(lbl)
