@@ -92,6 +92,7 @@ signal login_streak_updated(data: Dictionary)
 signal achievement_export_ready(data: Dictionary)
 signal player_journal_updated(entries: Array)
 signal slot_recommendations_updated(data: Array)
+signal inventory_value_summary_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -373,6 +374,15 @@ func fetch_player_journal(limit: int = 20) -> void:
 			player_journal_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /player/journal response not an Array")
+	)
+
+
+func fetch_inventory_value_summary() -> void:
+	_http_get("/inventory/value-summary", func(data) -> void:
+		if data is Dictionary:
+			inventory_value_summary_updated.emit(data as Dictionary)
+		else:
+			push_error("GameAPI: /inventory/value-summary response not a Dictionary")
 	)
 
 func patch_inventory_tags(instance_id: String, tags: Array) -> void:

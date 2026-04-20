@@ -668,6 +668,33 @@ def fuse_items(body: FuseRequest, request: Request) -> dict:
     }
 
 
+@router.get("/value-summary")
+def get_value_summary(request: Request) -> dict:
+    """Return aggregate value metrics for the player's inventory."""
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT json_extract(d.data, '$.rarity') AS rarity
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+        """,
+    ).fetchall()
+
+    by_rarity: dict[str, int] = {}
+    estimated_value = 0
+    for row in rows:
+        rarity: str = (row["rarity"] or "COMMON").upper()
+        by_rarity[rarity] = by_rarity.get(rarity, 0) + 1
+        estimated_value += _SELL_VALUES.get(rarity, _SELL_VALUES["COMMON"])
+
+    return {
+        "total_items":      len(rows),
+        "by_rarity":        by_rarity,
+        "estimated_value":  estimated_value,
+    }
+
+
 @router.get("/recipes")
 def get_recipes(request: Request) -> list[dict]:
     """Return crafting recipe templates based on current inventory.

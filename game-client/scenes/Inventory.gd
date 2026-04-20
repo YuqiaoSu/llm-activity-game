@@ -30,6 +30,9 @@ var _sort_mode: String       = "name"  # "name" | "rarity" | "quantity"
 # Filter/sort row (created once in _ready)
 var _filter_row: HBoxContainer
 
+# Value summary overlay
+var _value_overlay: Control = null
+
 
 func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
@@ -60,6 +63,17 @@ func _ready() -> void:
 		var timer := get_tree().create_timer(3.0)
 		timer.timeout.connect(func() -> void: repair_all_btn.text = "Repair All 🔧")
 	)
+
+	# "Value Summary" button
+	var value_btn := Button.new()
+	value_btn.text = "💰 Value"
+	value_btn.add_theme_font_size_override("font_size", 10)
+	value_btn.pressed.connect(func() -> void:
+		GameAPI.fetch_inventory_value_summary()
+	)
+	$VBox/Header.add_child(value_btn)
+	_build_value_overlay()
+	GameAPI.inventory_value_summary_updated.connect(_on_value_summary)
 
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
@@ -105,6 +119,8 @@ func _exit_tree() -> void:
 		GameAPI.slot_assigned.disconnect(_on_slot_assigned)
 	if GameAPI.donation_completed.is_connected(_on_donation_completed):
 		GameAPI.donation_completed.disconnect(_on_donation_completed)
+	if GameAPI.inventory_value_summary_updated.is_connected(_on_value_summary):
+		GameAPI.inventory_value_summary_updated.disconnect(_on_value_summary)
 	# inventory_note_saved: connected via anonymous lambda — no disconnect needed
 
 
@@ -943,3 +959,67 @@ func _format_slot_effects(effects: Array) -> String:
 				var c: String = str(p.get("category", "?")).capitalize()
 				parts.append("%.1f× %s XP when placed" % [f, c])
 	return ", ".join(parts)
+
+
+func _build_value_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+	_value_overlay = overlay
+	add_child(overlay)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(280, 200)
+	overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	var header_row := HBoxContainer.new()
+	vbox.add_child(header_row)
+
+	var title := Label.new()
+	title.text = "Inventory Value"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 14)
+	header_row.add_child(title)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	header_row.add_child(close_btn)
+
+	# Placeholder label — replaced in _on_value_summary
+	var body_lbl := Label.new()
+	body_lbl.name = "BodyLabel"
+	body_lbl.text = "Loading…"
+	body_lbl.modulate = Color(0.75, 0.75, 0.75)
+	vbox.add_child(body_lbl)
+
+
+func _on_value_summary(data: Dictionary) -> void:
+	if _value_overlay == null or not is_instance_valid(_value_overlay):
+		return
+
+	var panel := _value_overlay.get_child(0)
+	var vbox: VBoxContainer = panel.get_child(0) as VBoxContainer
+	var body_lbl: Label = vbox.get_node("BodyLabel") as Label
+
+	var total: int = data.get("total_items", 0)
+	var est: int   = data.get("estimated_value", 0)
+	var by_rar: Dictionary = data.get("by_rarity", {}) as Dictionary
+
+	var lines: PackedStringArray = PackedStringArray()
+	lines.append("Total items:  %d" % total)
+	lines.append("Est. value:   %d XP" % est)
+	lines.append("")
+	const ORDER := ["LEGENDARY", "EPIC", "RARE", "UNCOMMON", "COMMON"]
+	for rar in ORDER:
+		var count: int = by_rar.get(rar, 0) as int
+		if count > 0:
+			lines.append("  %s: %d" % [rar.capitalize(), count])
+
+	body_lbl.text = "\n".join(lines)
+	_value_overlay.visible = true
