@@ -34,6 +34,38 @@ _PLACE_TYPE_TO_CATEGORY: dict[str, str] = {
 }
 
 _SPECIALTY_MULTIPLIER = 1.5
+_SLOT_BONUS_PER_MATCH = 0.05
+_SLOT_BONUS_CAP = 1.3
+
+
+def _slot_category_bonus(db: sqlite3.Connection, place_id: str) -> float:
+    """Return an XP multiplier based on how many slot occupants match the place's preferred category.
+
+    1.0 + 0.05 per matching occupant, capped at 1.3.
+    """
+    place_row = db.execute(
+        "SELECT place_type FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        return 1.0
+    preferred = get_place_preferred_category(place_row["place_type"])
+    if preferred is None:
+        return 1.0
+
+    rows = db.execute(
+        """
+        SELECT json_extract(d.data, '$.category') AS cat
+        FROM place_slots ps
+        JOIN inventory i ON ps.occupant_id = i.instance_id
+        JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE ps.place_id = ? AND ps.occupant_id IS NOT NULL
+        """,
+        (place_id,),
+    ).fetchall()
+
+    matches = sum(1 for r in rows if r["cat"] and r["cat"].upper() == preferred.upper())
+    bonus = 1.0 + matches * _SLOT_BONUS_PER_MATCH
+    return min(bonus, _SLOT_BONUS_CAP)
 
 
 def xp_threshold(level: int) -> int:
@@ -91,6 +123,11 @@ def award_place_xp(
             preferred = get_place_preferred_category(place_type_row["place_type"])
             if preferred and preferred.upper() == chunk_category.upper():
                 xp = max(1, int(xp * _SPECIALTY_MULTIPLIER))
+
+    # Apply slot occupant category bonus
+    slot_bonus = _slot_category_bonus(db, place_id)
+    if slot_bonus > 1.0:
+        xp = max(1, int(xp * slot_bonus))
 
     row = db.execute(
         "SELECT xp, level FROM places WHERE place_id=?",

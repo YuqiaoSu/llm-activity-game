@@ -385,7 +385,32 @@ func _make_card(place: Dictionary) -> Control:
 			var ts: String = str(latest.get("visited_at", "")).left(16).replace("T", " ")
 			_lv_lbl.text = "Last visited: %s" % ts
 		)
-		GameAPI.record_place_visit(_lv_pid)
+		# Reward flash label (hidden until a milestone reward fires)
+		var reward_lbl := Label.new()
+		reward_lbl.add_theme_font_size_override("font_size", 10)
+		reward_lbl.modulate = Color(0.4, 1.0, 0.4)
+		reward_lbl.visible = false
+		vbox.add_child(reward_lbl)
+		var _rw_lbl := reward_lbl
+		var _rw_pid := hist_pid
+		GameAPI.place_visit_recorded.connect(func(data: Dictionary) -> void:
+			if data.get("place_id", "") != _rw_pid:
+				return
+			if "reward_item_id" not in data:
+				return
+			_rw_lbl.text = "🎁 Streak reward!"
+			_rw_lbl.visible = true
+			var t := Timer.new()
+			t.wait_time = 3.0
+			t.one_shot = true
+			t.timeout.connect(func() -> void:
+				_rw_lbl.visible = false
+				t.queue_free()
+			)
+			add_child(t)
+			t.start()
+		)
+		GameAPI.record_place_visit(_rw_pid)
 		GameAPI.fetch_place_visits(_lv_pid, 1)
 
 		# Visit streak badge

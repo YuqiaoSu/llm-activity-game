@@ -3,7 +3,7 @@ import random
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, HTTPException, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, Field
 from services.drop_engine.lottery import DEFAULT_RARITY_WEIGHTS
 from services.models.enums import Category
 
@@ -350,6 +350,44 @@ def patch_inventory_tags(instance_id: str, body: TagsRequest, request: Request) 
     )
     db.commit()
     return {"instance_id": instance_id, "tags": body.tags}
+
+
+class BatchTagRequest(BaseModel):
+    instance_ids: list[str] = Field(..., min_length=1, max_length=50)
+    tags: list[str]
+
+    @field_validator("tags")
+    @classmethod
+    def validate_tags(cls, v: list[str]) -> list[str]:
+        if len(v) > _MAX_TAGS:
+            raise ValueError(f"A maximum of {_MAX_TAGS} tags are allowed")
+        cleaned = []
+        for tag in v:
+            tag = tag.strip()
+            if len(tag) > _MAX_TAG_LEN:
+                raise ValueError(f"Each tag must be {_MAX_TAG_LEN} characters or fewer (got: {tag!r})")
+            if tag:
+                cleaned.append(tag)
+        return cleaned
+
+
+@router.post("/batch-tag")
+def batch_tag_items(body: BatchTagRequest, request: Request) -> dict:
+    """Apply the same tag list to multiple inventory instances.
+
+    Unknown instance_ids are silently skipped. Returns {updated_count}.
+    """
+    db = request.app.state.db
+    tags_json = json.dumps(body.tags)
+    updated = 0
+    for iid in body.instance_ids:
+        cursor = db.execute(
+            "UPDATE inventory SET tags=? WHERE instance_id=? AND character_id='player_default'",
+            (tags_json, iid),
+        )
+        updated += cursor.rowcount
+    db.commit()
+    return {"updated_count": updated}
 
 
 class BulkSellRequest(BaseModel):

@@ -105,6 +105,7 @@ signal place_visit_recorded(data: Dictionary)
 signal place_visits_updated(entries: Array)
 signal expiring_items_updated(entries: Array)
 signal crafting_history_updated(entries: Array)
+signal batch_tag_completed(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -473,6 +474,20 @@ func fetch_place_visits(place_id: String, limit: int = 20) -> void:
 				place_visits_updated.emit(data as Array)
 			else:
 				push_error("GameAPI: /places/*/visits response not an Array")
+	)
+
+
+func batch_tag_items(instance_ids: Array, tags: Array) -> void:
+	var body := JSON.stringify({"instance_ids": instance_ids, "tags": tags})
+	_http_post(
+		"/inventory/batch-tag",
+		func(code: int, data: Dictionary) -> void:
+			if code == 200:
+				batch_tag_completed.emit(data)
+				fetch_inventory()
+			else:
+				push_error("GameAPI: batch_tag_items → %d" % code),
+		body,
 	)
 
 

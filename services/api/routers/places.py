@@ -1,4 +1,5 @@
 import json
+import random
 import uuid
 from datetime import datetime, timezone, date as date_type
 from fastapi import APIRouter, Request, HTTPException, Query
@@ -7,6 +8,11 @@ from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
 from services.place_service.upgrade import award_place_xp, get_place_preferred_category
 from services.progression.xp import get_total_xp, deduct_total_xp
+from services.reward_ledger.ledger import record_drop, _insert_notification
+from services.models.item import ItemDefinition, DropRequirement
+from services.models.enums import Category, Rarity
+
+_STREAK_MILESTONES = {3, 7, 14}
 
 _ACTIVITY_PLAYER = "player_default"
 
@@ -465,8 +471,47 @@ def record_visit(place_id: str, request: Request) -> dict:
         (log_id, place_id, now_iso),
     )
     db.commit()
-    return {"log_id": log_id, "place_id": place_id, "visited_at": now_iso,
-            "streak_days": new_streak}
+
+    # Milestone streak reward (idempotent via reward_ledger chunk_id)
+    reward_item_id: str | None = None
+    if new_streak in _STREAK_MILESTONES:
+        chunk_id = f"place_streak_{place_id}_{new_streak}"
+        item_row = db.execute(
+            "SELECT item_id, data FROM item_definitions ORDER BY RANDOM() LIMIT 1"
+        ).fetchone()
+        if item_row:
+            raw = json.loads(item_row["data"])
+            try:
+                dr_raw = raw.get("drop_requirement")
+                dr = DropRequirement(**dr_raw) if isinstance(dr_raw, dict) else DropRequirement()
+                item_def = ItemDefinition(
+                    item_id=item_row["item_id"],
+                    name=raw.get("name", item_row["item_id"]),
+                    category=Category(raw.get("category", "GENERAL")),
+                    rarity=Rarity(raw.get("rarity", "COMMON")),
+                    drop_requirement=dr,
+                    icon=raw.get("icon", ""),
+                    description=raw.get("description", ""),
+                )
+            except Exception:
+                item_def = None
+            if item_def is not None:
+                awarded = record_drop(db, chunk_id, 0, item_def, "player_default")
+                if awarded:
+                    reward_item_id = item_def.item_id
+                    _insert_notification(db, "player_default", "place_streak_reward", {
+                        "place_id": place_id,
+                        "streak_days": new_streak,
+                        "item_id": item_def.item_id,
+                        "item_name": item_def.name,
+                    })
+                    db.commit()
+
+    response: dict = {"log_id": log_id, "place_id": place_id, "visited_at": now_iso,
+                      "streak_days": new_streak}
+    if reward_item_id is not None:
+        response["reward_item_id"] = reward_item_id
+    return response
 
 
 @router.get("/{place_id}/visits")

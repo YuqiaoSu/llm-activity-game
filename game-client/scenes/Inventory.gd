@@ -488,8 +488,15 @@ func _rebuild_list(items: Array) -> void:
 			_compare_items.clear()
 			_rebuild_list(_items_cache)
 		)
+		var tag_btn := Button.new()
+		tag_btn.text = "Tag Both"
+		tag_btn.add_theme_font_size_override("font_size", 10)
+		tag_btn.pressed.connect(func() -> void:
+			_show_batch_tag_dialog()
+		)
 		_compare_bar.add_child(info_lbl)
 		_compare_bar.add_child(go_btn)
+		_compare_bar.add_child(tag_btn)
 		_compare_bar.add_child(cancel_btn)
 		_item_list.add_child(_compare_bar)
 
@@ -1433,3 +1440,53 @@ func _on_crafting_history(entries: Array) -> void:
 		lbl.text = "%s → %s [%s]  %s" % [action, item_id, rarity, happened]
 		lbl.add_theme_font_size_override("font_size", 11)
 		_craft_history_list.add_child(lbl)
+
+
+func _show_batch_tag_dialog() -> void:
+	if _compare_items.size() < 2:
+		return
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(280, 120)
+
+	var vbox := VBoxContainer.new()
+	var lbl := Label.new()
+	lbl.text = "Apply tag to both items:"
+	lbl.add_theme_font_size_override("font_size", 12)
+	vbox.add_child(lbl)
+
+	var tag_edit := LineEdit.new()
+	tag_edit.placeholder_text = "tag (max 12 chars)"
+	tag_edit.max_length = 12
+	vbox.add_child(tag_edit)
+
+	var btn_row := HBoxContainer.new()
+	var apply_btn := Button.new()
+	apply_btn.text = "Apply"
+	apply_btn.pressed.connect(func() -> void:
+		var tag_text := tag_edit.text.strip_edges()
+		if tag_text.is_empty():
+			return
+		var ids: Array = [
+			(_compare_items[0] as Dictionary).get("instances", [{}])[0].get("instance_id", ""),
+			(_compare_items[1] as Dictionary).get("instances", [{}])[0].get("instance_id", ""),
+		]
+		ids = ids.filter(func(s: String) -> bool: return s != "")
+		if not ids.is_empty():
+			GameAPI.batch_tag_items(ids, [tag_text])
+		overlay.queue_free()
+	)
+	var cancel_btn2 := Button.new()
+	cancel_btn2.text = "Cancel"
+	cancel_btn2.pressed.connect(func() -> void: overlay.queue_free())
+	btn_row.add_child(apply_btn)
+	btn_row.add_child(cancel_btn2)
+	vbox.add_child(btn_row)
+
+	panel.add_child(vbox)
+	overlay.add_child(panel)
+	add_child(overlay)
