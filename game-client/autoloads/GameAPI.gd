@@ -97,6 +97,7 @@ signal mastery_updated(entries: Array)
 signal player_timeline_updated(entries: Array)
 signal inventory_age_histogram_updated(data: Array)
 signal goal_stats_updated(data: Dictionary)
+signal upgrade_cost_updated(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -396,6 +397,17 @@ func fetch_goal_stats() -> void:
 			goal_stats_updated.emit(data as Dictionary)
 		else:
 			push_error("GameAPI: /goals/stats response not a Dictionary")
+	)
+
+
+func fetch_upgrade_cost(target_rarity: String, category: String) -> void:
+	_http_get(
+		"/inventory/upgrade-cost?target_rarity=%s&category=%s" % [target_rarity, category],
+		func(data) -> void:
+			if data is Dictionary:
+				upgrade_cost_updated.emit(data as Dictionary)
+			else:
+				push_error("GameAPI: /inventory/upgrade-cost response not a Dictionary")
 	)
 
 

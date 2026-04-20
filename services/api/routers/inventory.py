@@ -668,6 +668,70 @@ def fuse_items(body: FuseRequest, request: Request) -> dict:
     }
 
 
+# Number of COMMON items needed to craft one of each rarity (chain: 2 per step)
+_COMMONS_NEEDED: dict[str, int] = {
+    "COMMON":    1,
+    "UNCOMMON":  2,   # 2 COMMON → 1 UNCOMMON
+    "RARE":      4,   # 2 UNCOMMON → 1 RARE  (each needs 2 COMMON)
+    "EPIC":      8,
+    "LEGENDARY": 16,
+}
+
+
+@router.get("/upgrade-cost")
+def get_upgrade_cost(
+    request: Request,
+    target_rarity: str = Query(...),
+    category: str = Query(...),
+) -> dict:
+    """Return how many COMMON-tier items are needed to craft one of target_rarity."""
+    target = target_rarity.upper()
+    cat    = category.upper()
+    if target not in _COMMONS_NEEDED:
+        raise HTTPException(status_code=422, detail=f"Unknown rarity: {target_rarity}")
+    if target == "COMMON":
+        return {
+            "target_rarity": target,
+            "category":      cat,
+            "items_needed":  0,
+            "items_owned":   0,
+            "shortfall":     0,
+            "xp_equivalent": 0,
+        }
+
+    db = request.app.state.db
+    needed = _COMMONS_NEEDED[target]
+
+    # Count unplaced, non-expired COMMON items the player owns in this category
+    owned_rows = db.execute(
+        """
+        SELECT COUNT(*) AS cnt
+        FROM inventory i
+        LEFT JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
+          AND NOT EXISTS (
+              SELECT 1 FROM place_slots ps WHERE ps.occupant_id = i.instance_id
+          )
+          AND json_extract(d.data, '$.rarity')    = 'COMMON'
+          AND json_extract(d.data, '$.category')  = ?
+        """,
+        (cat,),
+    ).fetchone()
+    owned: int = owned_rows["cnt"] if owned_rows else 0
+    shortfall  = max(0, needed - owned)
+    xp_equiv   = shortfall * _SELL_VALUES.get("COMMON", 5)
+
+    return {
+        "target_rarity": target,
+        "category":      cat,
+        "items_needed":  needed,
+        "items_owned":   owned,
+        "shortfall":     shortfall,
+        "xp_equivalent": xp_equiv,
+    }
+
+
 @router.get("/value-summary")
 def get_value_summary(request: Request) -> dict:
     """Return aggregate value metrics for the player's inventory."""

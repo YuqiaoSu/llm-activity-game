@@ -33,6 +33,7 @@ var _filter_row: HBoxContainer
 # Value summary overlay
 var _value_overlay: Control = null
 var _age_overlay: Control = null
+var _upgrade_overlay: Control = null
 
 
 func _ready() -> void:
@@ -87,6 +88,18 @@ func _ready() -> void:
 	_build_age_overlay()
 	GameAPI.inventory_age_histogram_updated.connect(_on_age_histogram)
 
+	# "Upgrade Cost" button
+	var upgrade_btn := Button.new()
+	upgrade_btn.text = "💎 Cost"
+	upgrade_btn.add_theme_font_size_override("font_size", 10)
+	upgrade_btn.pressed.connect(func() -> void:
+		if _upgrade_overlay != null and is_instance_valid(_upgrade_overlay):
+			_upgrade_overlay.visible = true
+	)
+	$VBox/Header.add_child(upgrade_btn)
+	_build_upgrade_overlay()
+	GameAPI.upgrade_cost_updated.connect(_on_upgrade_cost)
+
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
 	GameAPI.item_discarded.connect(_on_item_discarded)
@@ -135,6 +148,8 @@ func _exit_tree() -> void:
 		GameAPI.inventory_value_summary_updated.disconnect(_on_value_summary)
 	if GameAPI.inventory_age_histogram_updated.is_connected(_on_age_histogram):
 		GameAPI.inventory_age_histogram_updated.disconnect(_on_age_histogram)
+	if GameAPI.upgrade_cost_updated.is_connected(_on_upgrade_cost):
+		GameAPI.upgrade_cost_updated.disconnect(_on_upgrade_cost)
 	# inventory_note_saved: connected via anonymous lambda — no disconnect needed
 
 
@@ -1125,3 +1140,91 @@ func _on_age_histogram(buckets: Array) -> void:
 		list.add_child(row)
 
 	_age_overlay.visible = true
+
+
+func _build_upgrade_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+	_upgrade_overlay = overlay
+	add_child(overlay)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(320, 200)
+	overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	var header_row := HBoxContainer.new()
+	vbox.add_child(header_row)
+
+	var title := Label.new()
+	title.text = "Upgrade Cost Estimator"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	title.add_theme_font_size_override("font_size", 13)
+	header_row.add_child(title)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	header_row.add_child(close_btn)
+
+	# Pickers row
+	var pickers_row := HBoxContainer.new()
+	vbox.add_child(pickers_row)
+
+	var rarity_opt := OptionButton.new()
+	rarity_opt.name = "RarityOption"
+	for r in ["UNCOMMON", "RARE", "EPIC", "LEGENDARY"]:
+		rarity_opt.add_item(r)
+	pickers_row.add_child(rarity_opt)
+
+	var cat_opt := OptionButton.new()
+	cat_opt.name = "CategoryOption"
+	for c in ["WORK", "LEARN", "PLAY", "REST", "SOCIAL", "CREATE"]:
+		cat_opt.add_item(c)
+	pickers_row.add_child(cat_opt)
+
+	var check_btn := Button.new()
+	check_btn.text = "Check"
+	check_btn.pressed.connect(func() -> void:
+		var rarity: String = rarity_opt.get_item_text(rarity_opt.selected)
+		var cat: String    = cat_opt.get_item_text(cat_opt.selected)
+		GameAPI.fetch_upgrade_cost(rarity, cat)
+	)
+	pickers_row.add_child(check_btn)
+
+	var result_lbl := Label.new()
+	result_lbl.name = "ResultLabel"
+	result_lbl.text = "Select a target rarity and category, then click Check."
+	result_lbl.modulate = Color(0.75, 0.75, 0.75)
+	result_lbl.add_theme_font_size_override("font_size", 11)
+	result_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
+	vbox.add_child(result_lbl)
+
+
+func _on_upgrade_cost(data: Dictionary) -> void:
+	if _upgrade_overlay == null or not is_instance_valid(_upgrade_overlay):
+		return
+	var panel := _upgrade_overlay.get_child(0)
+	var vbox: VBoxContainer = panel.get_child(0) as VBoxContainer
+	var result_lbl: Label = vbox.get_node("ResultLabel") as Label
+
+	var target: String  = str(data.get("target_rarity", "?")).capitalize()
+	var cat: String     = str(data.get("category", "?")).capitalize()
+	var needed: int     = data.get("items_needed", 0) as int
+	var owned: int      = data.get("items_owned", 0) as int
+	var shortfall: int  = data.get("shortfall", 0) as int
+	var xp_eq: int      = data.get("xp_equivalent", 0) as int
+
+	if needed == 0:
+		result_lbl.text = "Already at maximum rarity — no crafting needed."
+	elif shortfall == 0:
+		result_lbl.text = "%s %s: needs %d COMMON items — you have %d. Ready to craft!" \
+			% [cat, target, needed, owned]
+	else:
+		result_lbl.text = "%s %s: needs %d COMMON items.\nYou own %d → shortfall %d (%d XP to buy)." \
+			% [cat, target, needed, owned, shortfall, xp_eq]
