@@ -2,7 +2,7 @@ import json
 import math
 import sqlite3
 from datetime import date, timedelta
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from services.models.enums import Category
 from services.progression.xp import get_total_xp, compute_level, compute_evolution_stage, compute_level_xp_range
@@ -712,3 +712,74 @@ def post_login_checkin(request: Request) -> dict:
         "already_checked_in": False,
         "next_reward_at": next_reward_at,
     }
+
+
+def _journal_summary(event_type: str, payload: dict) -> str:
+    match event_type:
+        case "item_drop":
+            name = payload.get("item_name", payload.get("item_id", "?"))
+            rarity = payload.get("rarity", "")
+            return f"Item drop: {name}" + (f" [{rarity}]" if rarity else "")
+        case "level_up":
+            level = payload.get("new_level", "?")
+            return f"Level up! Reached Lv.{level}"
+        case "achievement_unlock":
+            name = payload.get("name", payload.get("achievement_id", "?"))
+            return f"Achievement unlocked: {name}"
+        case "place_unlock":
+            name = payload.get("place_name", payload.get("place_id", "?"))
+            return f"Place unlocked: {name}"
+        case "place_level_up":
+            name = payload.get("place_name", payload.get("place_id", "?"))
+            level = payload.get("new_level", "?")
+            return f"{name} reached Lv.{level}"
+        case "xp_milestone":
+            milestone = payload.get("milestone", "?")
+            return f"XP milestone: {milestone} XP"
+        case "streak_milestone":
+            days = payload.get("milestone", "?")
+            return f"Streak milestone: Day {days}"
+        case "recovery_gift":
+            name = payload.get("item_name", payload.get("item_id", "?"))
+            return f"Welcome back! Received {name}"
+        case "daily_goal_hit":
+            return "Daily goal reached!"
+        case "challenge_progress":
+            pct = payload.get("progress_pct", "?")
+            name = payload.get("challenge_name", "challenge")
+            return f"{name}: {pct}% complete"
+        case _:
+            return event_type.replace("_", " ").capitalize()
+
+
+@router.get("/journal")
+def get_player_journal(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[dict]:
+    """Return the player's event journal — major events newest-first."""
+    import json as _json
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT event_type, payload, created_at
+        FROM pending_notifications
+        WHERE character_id='player_default'
+        ORDER BY created_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    result = []
+    for row in rows:
+        payload: dict = {}
+        try:
+            payload = _json.loads(row["payload"] or "{}")
+        except Exception:
+            pass
+        result.append({
+            "event_type": row["event_type"],
+            "summary": _journal_summary(row["event_type"], payload),
+            "happened_at": row["created_at"],
+        })
+    return result

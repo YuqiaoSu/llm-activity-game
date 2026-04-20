@@ -90,6 +90,7 @@ signal challenge_streak_updated(data: Dictionary)
 signal mood_updated(data: Dictionary)
 signal login_streak_updated(data: Dictionary)
 signal achievement_export_ready(data: Dictionary)
+signal player_journal_updated(entries: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -354,6 +355,15 @@ func fetch_season() -> void:
 
 
 signal inventory_tags_saved(data: Dictionary)
+
+
+func fetch_player_journal(limit: int = 20) -> void:
+	_http_get("/player/journal?limit=%d" % limit, func(data) -> void:
+		if data is Array:
+			player_journal_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /player/journal response not an Array")
+	)
 
 func patch_inventory_tags(instance_id: String, tags: Array) -> void:
 	var body := JSON.stringify({"tags": tags})
