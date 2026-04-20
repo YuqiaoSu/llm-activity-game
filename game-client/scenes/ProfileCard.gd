@@ -345,6 +345,84 @@ func _on_profile(data: Dictionary) -> void:
 		_streak_label.modulate = _COLOR_GOLD if streak >= 7 else Color.WHITE
 
 	_rebuild_top_cats(data.get("category_xp", {}) as Dictionary)
+	_rebuild_category_breakdown(data.get("category_breakdown", []) as Array)
+
+
+var _cat_breakdown_list: VBoxContainer = null
+var _cat_breakdown_visible: bool = false
+
+
+func _rebuild_category_breakdown(breakdown: Array) -> void:
+	# Build the container once; toggled by a button added below TopCatsList
+	if _cat_breakdown_list == null:
+		var toggle_btn := Button.new()
+		toggle_btn.text = "All Categories ▾"
+		toggle_btn.add_theme_font_size_override("font_size", 10)
+		toggle_btn.modulate = Color(0.7, 0.85, 1.0)
+
+		_cat_breakdown_list = VBoxContainer.new()
+		_cat_breakdown_list.visible = false
+
+		toggle_btn.pressed.connect(func() -> void:
+			_cat_breakdown_visible = not _cat_breakdown_visible
+			_cat_breakdown_list.visible = _cat_breakdown_visible
+			toggle_btn.text = "All Categories ▴" if _cat_breakdown_visible else "All Categories ▾"
+		)
+
+		$VBox.add_child(toggle_btn)
+		$VBox.add_child(_cat_breakdown_list)
+		# Place right after TopCatsList
+		var cats_idx = _top_cats_list.get_index()
+		$VBox.move_child(toggle_btn, cats_idx + 1)
+		$VBox.move_child(_cat_breakdown_list, cats_idx + 2)
+
+	for child in _cat_breakdown_list.get_children():
+		child.queue_free()
+
+	var max_xp: int = 1
+	for entry in breakdown:
+		var xp: int = (entry as Dictionary).get("xp", 0) as int
+		if xp > max_xp:
+			max_xp = xp
+
+	for raw in breakdown:
+		if not raw is Dictionary:
+			continue
+		var entry := raw as Dictionary
+		var cat: String = str(entry.get("category", "")).capitalize()
+		var xp: int = entry.get("xp", 0) as int
+		var lvl: int = entry.get("level", 1) as int
+
+		var row := HBoxContainer.new()
+		var cat_lbl := Label.new()
+		cat_lbl.text = cat
+		cat_lbl.custom_minimum_size.x = 80
+		cat_lbl.add_theme_font_size_override("font_size", 10)
+
+		var lvl_lbl := Label.new()
+		lvl_lbl.text = "Lv.%d" % lvl
+		lvl_lbl.custom_minimum_size.x = 36
+		lvl_lbl.modulate = Color(0.9, 0.75, 0.2)
+		lvl_lbl.add_theme_font_size_override("font_size", 10)
+
+		var bar_bg := ColorRect.new()
+		bar_bg.custom_minimum_size = Vector2(80, 6)
+		bar_bg.color = Color(0.2, 0.2, 0.2)
+		var bar_fill := ColorRect.new()
+		bar_fill.custom_minimum_size = Vector2(max(2.0, float(xp) / float(max_xp) * 80.0), 6)
+		bar_fill.color = Color(0.30, 0.65, 1.00)
+		bar_bg.add_child(bar_fill)
+
+		var xp_lbl := Label.new()
+		xp_lbl.text = " %d XP" % xp
+		xp_lbl.modulate = Color(0.6, 0.8, 1.0)
+		xp_lbl.add_theme_font_size_override("font_size", 10)
+
+		row.add_child(cat_lbl)
+		row.add_child(lvl_lbl)
+		row.add_child(bar_bg)
+		row.add_child(xp_lbl)
+		_cat_breakdown_list.add_child(row)
 
 
 func _rebuild_top_cats(category_xp: Dictionary) -> void:

@@ -266,6 +266,12 @@ def get_player_profile(request: Request) -> dict:
     if stage + 1 in EVOLUTION_STAGES:
         next_stage_level = EVOLUTION_STAGES[stage + 1][0]
 
+    # Full per-category breakdown sorted by XP descending
+    category_breakdown = sorted(
+        [{"category": cat, "xp": xp, "level": xp // 50 + 1} for cat, xp in category_xp.items()],
+        key=lambda d: (-d["xp"], d["category"]),
+    )
+
     return {
         "character_id": row["character_id"],
         "name": row["name"],
@@ -281,6 +287,7 @@ def get_player_profile(request: Request) -> dict:
         "has_recovery_bonus": dormancy["has_recovery_bonus"],
         "mood": mood,
         "category_xp": category_xp,
+        "category_breakdown": category_breakdown,
         "visual": visual,
         "equipped_items": equipped_items,
         "equipped_title": row["equipped_title"] if "equipped_title" in row.keys() else None,
