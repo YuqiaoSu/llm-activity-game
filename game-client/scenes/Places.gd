@@ -18,6 +18,12 @@ var _history_overlay: Control = null
 var _history_list: VBoxContainer = null
 var _history_title: Label = null
 
+# Slot recommendations: {slot_id → {item_name, item_rarity}}
+var _slot_recommendations: Dictionary = {}
+var _last_places: Array = []
+# How many recommendation fetches are still in-flight for the current places load
+var _recs_pending: int = 0
+
 
 func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
@@ -29,6 +35,7 @@ func _ready() -> void:
 	GameAPI.place_leaderboard_updated.connect(_on_place_leaderboard)
 	GameAPI.place_xp_invested.connect(_on_xp_invested)
 	GameAPI.place_history_updated.connect(_on_place_history)
+	GameAPI.slot_recommendations_updated.connect(_on_slot_recommendations)
 	_build_history_overlay()
 	GameAPI.fetch_places()
 	GameAPI.fetch_place_leaderboard()
@@ -49,6 +56,8 @@ func _exit_tree() -> void:
 		GameAPI.place_xp_invested.disconnect(_on_xp_invested)
 	if GameAPI.place_history_updated.is_connected(_on_place_history):
 		GameAPI.place_history_updated.disconnect(_on_place_history)
+	if GameAPI.slot_recommendations_updated.is_connected(_on_slot_recommendations):
+		GameAPI.slot_recommendations_updated.disconnect(_on_slot_recommendations)
 
 
 func _on_inventory_cache(items: Array) -> void:
@@ -69,14 +78,30 @@ func _on_xp_invested(_result: Dictionary) -> void:
 
 
 func _on_places(places: Array) -> void:
-	_count_label.text = "Places (%d)" % places.size()
+	_last_places = places
+	_slot_recommendations = {}
+	_recs_pending = 0
+	for raw in places:
+		if raw is Dictionary and (raw as Dictionary).get("state", "") == "UNLOCKED":
+			_recs_pending += 1
+	_rebuild_place_list()
+	for raw in places:
+		if raw is Dictionary and (raw as Dictionary).get("state", "") == "UNLOCKED":
+			GameAPI.fetch_slot_recommendations(str((raw as Dictionary).get("place_id", "")))
+
+
+func _rebuild_place_list() -> void:
+	_count_label.text = "Places (%d)" % _last_places.size()
 	for child in _place_list.get_children():
 		child.queue_free()
-	for raw in places:
+	_leaderboard_container = null  # freed by queue_free above
+	for raw in _last_places:
 		if not raw is Dictionary:
 			push_warning("Places: skipping non-Dictionary entry: %s" % str(raw))
 			continue
 		_place_list.add_child(_make_card(raw as Dictionary))
+	# Re-request leaderboard so it re-appends itself
+	GameAPI.fetch_place_leaderboard()
 
 
 func _on_place_leaderboard(entries: Array) -> void:
@@ -152,6 +177,16 @@ func _on_place_leaderboard(entries: Array) -> void:
 		section.add_child(hbox)
 
 	_place_list.add_child(section)
+
+
+func _on_slot_recommendations(recs: Array) -> void:
+	for raw in recs:
+		if raw is Dictionary:
+			var rec := raw as Dictionary
+			_slot_recommendations[rec.get("slot_id", "")] = rec
+	_recs_pending = max(0, _recs_pending - 1)
+	if _recs_pending == 0:
+		_rebuild_place_list()
 
 
 func _build_history_overlay() -> void:
@@ -510,6 +545,19 @@ func _make_slot_row(place: Dictionary, slot: Dictionary) -> Control:
 		)
 		btn_row.add_child(assign_btn)
 		row.add_child(btn_row)
+
+		# Recommendation hint
+		if _slot_recommendations.has(slot_id):
+			var rec: Dictionary = _slot_recommendations[slot_id] as Dictionary
+			var rec_lbl := Label.new()
+			rec_lbl.text = "  💡 Best fit: %s [%s]" % [
+				rec.get("item_name", "?"),
+				str(rec.get("item_rarity", "")).capitalize(),
+			]
+			rec_lbl.modulate = Color(0.75, 0.95, 0.6)
+			rec_lbl.add_theme_font_size_override("font_size", 10)
+			row.add_child(rec_lbl)
+
 		row.add_child(picker_box)
 		return row
 

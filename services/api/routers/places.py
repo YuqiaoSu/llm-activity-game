@@ -146,6 +146,75 @@ def get_place_leaderboard(request: Request) -> list[dict]:
     ]
 
 
+_RARITY_RANK = {"COMMON": 1, "UNCOMMON": 2, "RARE": 3, "EPIC": 4, "LEGENDARY": 5}
+
+
+@router.get("/{place_id}/slot-recommend")
+def get_slot_recommendations(place_id: str, request: Request) -> list[dict]:
+    """Return the best available unplaced item for each empty slot at this place.
+
+    Scoring: category_match (0 or 10) + rarity_rank (1-5).
+    Returns an empty list when all slots are filled or inventory is empty.
+    """
+    db = request.app.state.db
+    place = db.execute("SELECT place_id FROM places WHERE place_id=?", (place_id,)).fetchone()
+    if place is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+
+    # Load empty slots
+    empty_slots = db.execute(
+        "SELECT slot_id, slot_type, accepts FROM place_slots"
+        " WHERE place_id=? AND occupant_id IS NULL",
+        (place_id,),
+    ).fetchall()
+    if not empty_slots:
+        return []
+
+    # Load all unplaced inventory items with their item data
+    inv_rows = db.execute(
+        """
+        SELECT i.instance_id,
+               json_extract(d.data, '$.name')   AS item_name,
+               json_extract(d.data, '$.rarity') AS rarity,
+               json_extract(d.data, '$.category') AS category
+        FROM inventory i
+        JOIN item_definitions d ON d.item_id = i.item_id
+        WHERE i.character_id = 'player_default'
+          AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
+          AND i.instance_id NOT IN (
+              SELECT occupant_id FROM place_slots WHERE occupant_id IS NOT NULL
+          )
+        """,
+    ).fetchall()
+    if not inv_rows:
+        return []
+
+    results = []
+    for slot in empty_slots:
+        slot_id: str = slot["slot_id"]
+        accepts = _accepts_list(dict(slot))
+
+        best = None
+        best_score = -1
+        for item in inv_rows:
+            cat: str   = str(item["category"] or "").upper()
+            rar: str   = str(item["rarity"] or "COMMON").upper()
+            cat_match  = 10 if (not accepts or cat in accepts) else 0
+            # Skip items that don't match the slot filter
+            if accepts and cat not in accepts:
+                continue
+            score = cat_match + _RARITY_RANK.get(rar, 1)
+            if score > best_score:
+                best_score = score
+                best = {"slot_id": slot_id, "recommended_instance_id": item["instance_id"],
+                        "item_name": item["item_name"], "item_rarity": rar, "score": score}
+
+        if best:
+            results.append(best)
+
+    return results
+
+
 @router.get("/{place_id}/upgrade-preview")
 def get_place_upgrade_preview(
     place_id: str,

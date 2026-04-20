@@ -91,6 +91,7 @@ signal mood_updated(data: Dictionary)
 signal login_streak_updated(data: Dictionary)
 signal achievement_export_ready(data: Dictionary)
 signal player_journal_updated(entries: Array)
+signal slot_recommendations_updated(data: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -355,6 +356,15 @@ func fetch_season() -> void:
 
 
 signal inventory_tags_saved(data: Dictionary)
+
+
+func fetch_slot_recommendations(place_id: String) -> void:
+	_http_get("/places/%s/slot-recommend" % place_id, func(data) -> void:
+		if data is Array:
+			slot_recommendations_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /places/slot-recommend response not an Array")
+	)
 
 
 func fetch_player_journal(limit: int = 20) -> void:
