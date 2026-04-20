@@ -388,6 +388,15 @@ func _make_card(place: Dictionary) -> Control:
 		GameAPI.record_place_visit(_lv_pid)
 		GameAPI.fetch_place_visits(_lv_pid, 1)
 
+		# Visit streak badge
+		var streak_days: int = place.get("visit_streak", 0) as int
+		if streak_days > 1:
+			var streak_lbl := Label.new()
+			streak_lbl.add_theme_font_size_override("font_size", 10)
+			streak_lbl.modulate = Color(1.0, 0.6, 0.1)
+			streak_lbl.text = "🔥 %d-day visit streak" % streak_days
+			vbox.add_child(streak_lbl)
+
 		var slot_log_btn := Button.new()
 		slot_log_btn.text = "Slot Log →"
 		slot_log_btn.add_theme_font_size_override("font_size", 10)

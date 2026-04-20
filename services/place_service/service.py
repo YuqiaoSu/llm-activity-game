@@ -36,6 +36,8 @@ def _row_to_place(conn: sqlite3.Connection, row: sqlite3.Row) -> Place:
         ],
         xp=row["xp"] if "xp" in row.keys() else 0,
         level=row["level"] if "level" in row.keys() else 1,
+        visit_streak=row["visit_streak"] if "visit_streak" in row.keys() else 0,
+        last_visit_date=row["last_visit_date"] if "last_visit_date" in row.keys() else None,
     )
 
 

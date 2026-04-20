@@ -1,6 +1,6 @@
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date as date_type
 from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, Field
 from services.place_service.service import get_place, list_places
@@ -423,16 +423,41 @@ class InvestBody(BaseModel):
 
 @router.post("/{place_id}/visit")
 def record_visit(place_id: str, request: Request) -> dict:
-    """Record that the player visited (opened) this place. Idempotent — always appends.
+    """Record that the player visited (opened) this place and update the visit streak.
 
+    Streak logic: same calendar day → no change; +1 day → increment; >1 day → reset to 1.
     Returns 404 if the place does not exist.
     """
     db = request.app.state.db
     place_row = db.execute(
-        "SELECT place_id FROM places WHERE place_id=?", (place_id,)
+        "SELECT place_id, visit_streak, last_visit_date FROM places WHERE place_id=?",
+        (place_id,),
     ).fetchone()
     if place_row is None:
         raise HTTPException(status_code=404, detail="Place not found")
+
+    today = date_type.today()
+    today_str = today.isoformat()
+    last_visit_date_str = place_row["last_visit_date"]
+    current_streak: int = place_row["visit_streak"] or 0
+
+    if last_visit_date_str is None:
+        new_streak = 1
+    else:
+        last_date = date_type.fromisoformat(last_visit_date_str)
+        delta = (today - last_date).days
+        if delta == 0:
+            new_streak = current_streak  # same day — no change
+        elif delta == 1:
+            new_streak = current_streak + 1
+        else:
+            new_streak = 1  # gap — reset
+
+    db.execute(
+        "UPDATE places SET visit_streak=?, last_visit_date=? WHERE place_id=?",
+        (new_streak, today_str, place_id),
+    )
+
     log_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
     db.execute(
@@ -440,7 +465,8 @@ def record_visit(place_id: str, request: Request) -> dict:
         (log_id, place_id, now_iso),
     )
     db.commit()
-    return {"log_id": log_id, "place_id": place_id, "visited_at": now_iso}
+    return {"log_id": log_id, "place_id": place_id, "visited_at": now_iso,
+            "streak_days": new_streak}
 
 
 @router.get("/{place_id}/visits")

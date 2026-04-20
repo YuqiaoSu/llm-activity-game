@@ -104,6 +104,7 @@ signal slot_history_updated(entries: Array)
 signal place_visit_recorded(data: Dictionary)
 signal place_visits_updated(entries: Array)
 signal expiring_items_updated(entries: Array)
+signal crafting_history_updated(entries: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -472,6 +473,15 @@ func fetch_place_visits(place_id: String, limit: int = 20) -> void:
 				place_visits_updated.emit(data as Array)
 			else:
 				push_error("GameAPI: /places/*/visits response not an Array")
+	)
+
+
+func fetch_crafting_history(limit: int = 20) -> void:
+	_http_get("/inventory/crafting-history?limit=%d" % limit, func(data) -> void:
+		if data is Array:
+			crafting_history_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory/crafting-history response not an Array")
 	)
 
 

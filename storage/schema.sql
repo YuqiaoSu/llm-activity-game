@@ -105,6 +105,17 @@ CREATE TABLE IF NOT EXISTS place_visit_log (
     visited_at TEXT NOT NULL
 );
 
+-- crafting_log: audit trail of item upgrades and crafting actions
+CREATE TABLE IF NOT EXISTS crafting_log (
+    log_id         TEXT PRIMARY KEY,
+    player_id      TEXT NOT NULL DEFAULT 'player_default',
+    action         TEXT NOT NULL,   -- 'upgrade' | 'craft'
+    source_ids     TEXT NOT NULL DEFAULT '[]',  -- JSON array of consumed instance_ids
+    result_item_id TEXT NOT NULL,
+    result_rarity  TEXT NOT NULL,
+    happened_at    TEXT NOT NULL
+);
+
 -- slot_assignment_log: audit trail of items assigned to / removed from place slots
 CREATE TABLE IF NOT EXISTS slot_assignment_log (
     log_id       TEXT PRIMARY KEY,

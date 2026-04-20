@@ -43,3 +43,5 @@ class Place(BaseModel):
     active_effects: list[Effect] = Field(default_factory=list)  # rebuilt whenever a slot occupant changes
     xp: int = 0
     level: int = 1
+    visit_streak: int = 0
+    last_visit_date: str | None = None

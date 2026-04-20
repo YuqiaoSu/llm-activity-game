@@ -19,8 +19,10 @@ def _run_migrations(conn: sqlite3.Connection) -> None:
     SQLite does not support IF NOT EXISTS on ALTER TABLE, so we catch
     the OperationalError that fires when a column already exists.
     """
-    _safe_add_column(conn, "places", "xp",    "INTEGER NOT NULL DEFAULT 0")
-    _safe_add_column(conn, "places", "level",  "INTEGER NOT NULL DEFAULT 1")
+    _safe_add_column(conn, "places", "xp",             "INTEGER NOT NULL DEFAULT 0")
+    _safe_add_column(conn, "places", "level",           "INTEGER NOT NULL DEFAULT 1")
+    _safe_add_column(conn, "places", "visit_streak",    "INTEGER NOT NULL DEFAULT 0")
+    _safe_add_column(conn, "places", "last_visit_date", "TEXT")
     # Decay columns added to streak_state
     from services.progression.decay import migrate as _decay_migrate
     _decay_migrate(conn)

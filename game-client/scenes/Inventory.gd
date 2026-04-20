@@ -39,6 +39,8 @@ var _upgrade_cat_opt: OptionButton = null
 var _expiry_badge: Button = null
 var _expiry_overlay: Control = null
 var _expiry_list: VBoxContainer = null
+var _craft_history_overlay: Control = null
+var _craft_history_list: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -119,6 +121,19 @@ func _ready() -> void:
 	_build_expiry_overlay()
 	GameAPI.expiring_items_updated.connect(_on_expiring_items)
 
+	# "Craft History →" button
+	var hist_btn := Button.new()
+	hist_btn.text = "Craft Log"
+	hist_btn.add_theme_font_size_override("font_size", 10)
+	hist_btn.pressed.connect(func() -> void:
+		GameAPI.fetch_crafting_history()
+		if _craft_history_overlay != null and is_instance_valid(_craft_history_overlay):
+			_craft_history_overlay.visible = true
+	)
+	$VBox/Header.add_child(hist_btn)
+	_build_craft_history_overlay()
+	GameAPI.crafting_history_updated.connect(_on_crafting_history)
+
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
 	GameAPI.item_discarded.connect(_on_item_discarded)
@@ -174,6 +189,8 @@ func _exit_tree() -> void:
 		GameAPI.upgrade_crafted.disconnect(_on_upgrade_crafted)
 	if GameAPI.expiring_items_updated.is_connected(_on_expiring_items):
 		GameAPI.expiring_items_updated.disconnect(_on_expiring_items)
+	if GameAPI.crafting_history_updated.is_connected(_on_crafting_history):
+		GameAPI.crafting_history_updated.disconnect(_on_crafting_history)
 	# inventory_note_saved: connected via anonymous lambda — no disconnect needed
 
 
@@ -322,10 +339,10 @@ func _make_filter_row() -> HBoxContainer:
 	row.add_child(sort_label)
 
 	var sort_opt := OptionButton.new()
-	for s in ["Name", "Rarity", "Qty", "Set"]:
+	for s in ["Name", "Rarity", "Qty", "Set", "Expiry"]:
 		sort_opt.add_item(s)
 	sort_opt.item_selected.connect(func(idx: int) -> void:
-		_sort_mode = ["name", "rarity", "quantity", "set"][idx]
+		_sort_mode = ["name", "rarity", "quantity", "set", "expiry"][idx]
 		_rebuild_list(_items_cache)
 	)
 	row.add_child(sort_opt)
@@ -405,6 +422,19 @@ func _apply_filter_sort(items: Array) -> Array:
 					return sa < sb  # alphabetical within different sets
 				return a.get("name", a.get("item_id", "")) < b.get("name", b.get("item_id", ""))
 			)
+		"expiry":
+			# Items with expires_at sort first (earliest expiry first);
+			# items without expires_at are appended after.
+			var expiring: Array = result.filter(func(item: Dictionary) -> bool:
+				return item.get("expires_at", null) != null
+			)
+			var permanent: Array = result.filter(func(item: Dictionary) -> bool:
+				return item.get("expires_at", null) == null
+			)
+			expiring.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+				return str(a.get("expires_at", "")) < str(b.get("expires_at", ""))
+			)
+			result = expiring + permanent
 	return result
 
 
@@ -1345,3 +1375,61 @@ func _on_expiring_items(entries: Array) -> void:
 		lbl.text = "%s — %d day(s) left (%s)" % [name_str, days_left, expires_at.left(10)]
 		lbl.add_theme_font_size_override("font_size", 11)
 		_expiry_list.add_child(lbl)
+
+
+func _build_craft_history_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(400, 320)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+
+	var title := Label.new()
+	title.text = "Crafting History"
+	title.add_theme_font_size_override("font_size", 14)
+	vbox.add_child(title)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(380, 220)
+	_craft_history_list = VBoxContainer.new()
+	_craft_history_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_craft_history_list)
+	vbox.add_child(scroll)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	vbox.add_child(close_btn)
+
+	panel.add_child(vbox)
+	overlay.add_child(panel)
+	add_child(overlay)
+	_craft_history_overlay = overlay
+
+
+func _on_crafting_history(entries: Array) -> void:
+	if _craft_history_list == null or not is_instance_valid(_craft_history_list):
+		return
+	for child in _craft_history_list.get_children():
+		child.queue_free()
+	if entries.is_empty():
+		var empty_lbl := Label.new()
+		empty_lbl.text = "No crafting actions yet."
+		empty_lbl.add_theme_font_size_override("font_size", 11)
+		_craft_history_list.add_child(empty_lbl)
+		return
+	for entry in entries:
+		var lbl := Label.new()
+		var action: String     = str(entry.get("action", "?")).capitalize()
+		var rarity: String     = str(entry.get("result_rarity", "?"))
+		var item_id: String    = str(entry.get("result_item_id", "?"))
+		var happened: String   = str(entry.get("happened_at", "")).left(10)
+		lbl.text = "%s → %s [%s]  %s" % [action, item_id, rarity, happened]
+		lbl.add_theme_font_size_override("font_size", 11)
+		_craft_history_list.add_child(lbl)

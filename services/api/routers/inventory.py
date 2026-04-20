@@ -830,6 +830,12 @@ def upgrade_item(body: _UpgradeBody, request: Request) -> dict:
         " VALUES ('player_default', ?, ?)",
         (new_item_id, now_iso),
     )
+    db.execute(
+        "INSERT INTO crafting_log"
+        " (log_id, player_id, action, source_ids, result_item_id, result_rarity, happened_at)"
+        " VALUES (?, 'player_default', 'upgrade', ?, ?, ?, ?)",
+        (str(uuid.uuid4()), json.dumps(consumed_ids), new_item_id, target, now_iso),
+    )
     db.commit()
 
     new_def = db.execute(
@@ -1075,6 +1081,36 @@ def get_expiring_items(
             "category":    r["category"] or "",
             "expires_at":  r["expires_at"],
             "days_left":   r["days_left"] if r["days_left"] is not None else 0,
+        }
+        for r in rows
+    ]
+
+
+@router.get("/crafting-history")
+def get_crafting_history(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[dict]:
+    """Return the player's crafting/upgrade history, newest first."""
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT log_id, action, source_ids, result_item_id, result_rarity, happened_at
+        FROM crafting_log
+        WHERE player_id = 'player_default'
+        ORDER BY happened_at DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    return [
+        {
+            "log_id":         r["log_id"],
+            "action":         r["action"],
+            "source_ids":     json.loads(r["source_ids"]),
+            "result_item_id": r["result_item_id"],
+            "result_rarity":  r["result_rarity"],
+            "happened_at":    r["happened_at"],
         }
         for r in rows
     ]

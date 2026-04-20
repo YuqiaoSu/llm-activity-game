@@ -114,6 +114,14 @@ def craft_items(body: CraftRequest, request: Request) -> dict:
         ("player_default", new_item_id, now),
     )
 
+    # Crafting audit log
+    db.execute(
+        "INSERT INTO crafting_log"
+        " (log_id, player_id, action, source_ids, result_item_id, result_rarity, happened_at)"
+        " VALUES (?, 'player_default', 'craft', ?, ?, ?, ?)",
+        (str(uuid.uuid4()), json.dumps([inst_a, inst_b]), new_item_id, result_rarity, now),
+    )
+
     db.commit()
 
     new_def_row = db.execute(
