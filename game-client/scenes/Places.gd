@@ -13,6 +13,11 @@ const _COLOR_SLOT_FILLED := Color(0.9, 0.75, 0.2)
 var _inventory: Array[Dictionary] = []
 var _leaderboard_container: VBoxContainer = null
 
+# History overlay (shared, built once)
+var _history_overlay: Control = null
+var _history_list: VBoxContainer = null
+var _history_title: Label = null
+
 
 func _ready() -> void:
 	$VBox/Header/BackButton.pressed.connect(func() -> void:
@@ -23,6 +28,8 @@ func _ready() -> void:
 	GameAPI.slot_assigned.connect(_on_slot_assigned)
 	GameAPI.place_leaderboard_updated.connect(_on_place_leaderboard)
 	GameAPI.place_xp_invested.connect(_on_xp_invested)
+	GameAPI.place_history_updated.connect(_on_place_history)
+	_build_history_overlay()
 	GameAPI.fetch_places()
 	GameAPI.fetch_place_leaderboard()
 	# Pre-load inventory so the slot picker is ready without a round-trip delay
@@ -40,6 +47,8 @@ func _exit_tree() -> void:
 		GameAPI.place_leaderboard_updated.disconnect(_on_place_leaderboard)
 	if GameAPI.place_xp_invested.is_connected(_on_xp_invested):
 		GameAPI.place_xp_invested.disconnect(_on_xp_invested)
+	if GameAPI.place_history_updated.is_connected(_on_place_history):
+		GameAPI.place_history_updated.disconnect(_on_place_history)
 
 
 func _on_inventory_cache(items: Array) -> void:
@@ -145,6 +154,91 @@ func _on_place_leaderboard(entries: Array) -> void:
 	_place_list.add_child(section)
 
 
+func _build_history_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.75)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+	_history_overlay = overlay
+	add_child(overlay)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(340, 280)
+	overlay.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	panel.add_child(vbox)
+
+	var header_row := HBoxContainer.new()
+	vbox.add_child(header_row)
+
+	_history_title = Label.new()
+	_history_title.text = "History"
+	_history_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_history_title.add_theme_font_size_override("font_size", 14)
+	header_row.add_child(_history_title)
+
+	var close_btn := Button.new()
+	close_btn.text = "✕"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	header_row.add_child(close_btn)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 220)
+	vbox.add_child(scroll)
+
+	_history_list = VBoxContainer.new()
+	_history_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_history_list)
+
+
+func _on_place_history(entries: Array) -> void:
+	for child in _history_list.get_children():
+		child.queue_free()
+
+	if entries.is_empty():
+		var lbl := Label.new()
+		lbl.text = "  No activity yet."
+		lbl.modulate = Color(0.6, 0.6, 0.6)
+		_history_list.add_child(lbl)
+		_history_overlay.visible = true
+		return
+
+	for raw in entries:
+		if not raw is Dictionary:
+			continue
+		var entry := raw as Dictionary
+		var action: String = str(entry.get("action", "?")).capitalize()
+		var amount: int = int(entry.get("amount", 0))
+		var ts: String = str(entry.get("happened_at", "")).left(16).replace("T", " ")
+
+		var row := HBoxContainer.new()
+		var act_lbl := Label.new()
+		act_lbl.text = "  %s" % action
+		act_lbl.custom_minimum_size.x = 100
+		act_lbl.modulate = Color(0.9, 0.85, 1.0)
+		act_lbl.add_theme_font_size_override("font_size", 11)
+
+		var amt_lbl := Label.new()
+		amt_lbl.text = "+%d XP" % amount if amount > 0 else ""
+		amt_lbl.custom_minimum_size.x = 70
+		amt_lbl.modulate = Color(0.55, 0.85, 1.0)
+		amt_lbl.add_theme_font_size_override("font_size", 11)
+
+		var ts_lbl := Label.new()
+		ts_lbl.text = ts
+		ts_lbl.modulate = Color(0.5, 0.5, 0.5)
+		ts_lbl.add_theme_font_size_override("font_size", 10)
+
+		row.add_child(act_lbl)
+		row.add_child(amt_lbl)
+		row.add_child(ts_lbl)
+		_history_list.add_child(row)
+
+	_history_overlay.visible = true
+
+
 func _make_card(place: Dictionary) -> Control:
 	var unlocked: bool = place.get("state", "LOCKED") == "UNLOCKED"
 
@@ -216,6 +310,19 @@ func _make_card(place: Dictionary) -> Control:
 		bonus_lbl.modulate = Color(1.0, 0.85, 0.1)   # gold
 		bonus_lbl.add_theme_font_size_override("font_size", 11)
 		vbox.add_child(bonus_lbl)
+
+	# ── history button (only for unlocked places) ───────────────────────────
+	if unlocked:
+		var hist_btn := Button.new()
+		hist_btn.text = "History →"
+		hist_btn.add_theme_font_size_override("font_size", 10)
+		var hist_pid: String = place.get("place_id", "")
+		var hist_name: String = place.get("name", hist_pid)
+		hist_btn.pressed.connect(func() -> void:
+			_history_title.text = "%s — History" % hist_name
+			GameAPI.fetch_place_history(hist_pid, 10)
+		)
+		vbox.add_child(hist_btn)
 
 	# ── place level / XP (only for unlocked places) ─────────────────────────
 	if unlocked:
