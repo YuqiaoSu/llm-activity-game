@@ -135,7 +135,7 @@ def bootstrap_defaults(conn: sqlite3.Connection) -> None:
         "item_drop", "item_sold", "bulk_item_sold", "level_up",
         "place_unlock", "place_level_up", "achievement_unlock",
         "xp_milestone", "streak_milestone", "challenge_progress",
-        "daily_goal_hit",
+        "daily_goal_hit", "recovery_gift",
     ]
     for et in _known_event_types:
         conn.execute(

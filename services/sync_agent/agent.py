@@ -227,6 +227,24 @@ class SyncAgent:
         # Apply recovery bonus multiplier for returning after dormancy
         if had_recovery:
             xp_multiplier *= RECOVERY_MULTIPLIER
+            # Award a welcome-back gift item (idempotent via chunk_id="recovery_gift")
+            # Use items that have no activity_label restriction (broadly eligible)
+            recovery_pool = [i for i in catalogue if i.drop_requirement.activity_label is None]
+            winner = weighted_draw(recovery_pool, DEFAULT_RARITY_WEIGHTS, drop_weight_mods={}, luck=luck)
+            if winner:
+                record_drop(
+                    self.db,
+                    chunk_id="recovery_gift",
+                    roll_n=0,
+                    item=winner,
+                    character_id=self.character_id,
+                )
+                from services.reward_ledger.ledger import _insert_notification
+                _insert_notification(self.db, self.character_id, "recovery_gift", {
+                    "item_id":   winner.item_id,
+                    "item_name": winner.name,
+                    "rarity":    winner.rarity.value,
+                })
 
         # Apply player-set mood multiplier (drops to neutral after 24h inactivity)
         xp_multiplier *= drop_mood_multiplier(self.db)
