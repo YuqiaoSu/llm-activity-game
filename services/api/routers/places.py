@@ -5,7 +5,7 @@ from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, Field
 from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
-from services.place_service.upgrade import award_place_xp
+from services.place_service.upgrade import award_place_xp, get_place_preferred_category
 from services.progression.xp import get_total_xp, deduct_total_xp
 
 _ACTIVITY_PLAYER = "player_default"
@@ -204,11 +204,18 @@ def get_place_history(
             for r in rows]
 
 
+def _add_preferred_category(place_dicts: list[dict]) -> list[dict]:
+    for p in place_dicts:
+        p["preferred_category"] = get_place_preferred_category(p.get("place_type", ""))
+    return place_dicts
+
+
 @router.get("")
 def get_places(request: Request) -> list[dict]:
     db = request.app.state.db
     dicts = [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
     _add_set_bonus_flag(db, dicts)
+    _add_preferred_category(dicts)
     return _add_perks(db, dicts)
 
 
@@ -505,7 +512,8 @@ def gift_item(place_id: str, body: GiftItemBody, request: Request) -> dict:
     inv_row = db.execute(
         """
         SELECT i.instance_id, i.item_id, i.locked,
-               json_extract(d.data, '$.rarity') AS rarity
+               json_extract(d.data, '$.rarity')   AS rarity,
+               json_extract(d.data, '$.category') AS category
         FROM inventory i
         JOIN item_definitions d ON i.item_id = d.item_id
         WHERE i.instance_id=? AND i.character_id='player_default'
@@ -518,20 +526,26 @@ def gift_item(place_id: str, body: GiftItemBody, request: Request) -> dict:
         raise HTTPException(status_code=409, detail="Item is locked; unlock it before gifting")
 
     rarity: str = inv_row["rarity"] or "COMMON"
+    item_category: str | None = inv_row["category"]
     xp_gained: int = _GIFT_XP.get(rarity, 5)
 
     db.execute("DELETE FROM inventory WHERE instance_id=?", (body.instance_id,))
-    levelled_up = award_place_xp(db, place_id, xp_gained)
+    levelled_up = award_place_xp(db, place_id, xp_gained, chunk_category=item_category)
     _log_place_activity(db, place_id, "gift_item", xp_gained)
     db.commit()
 
-    updated = db.execute("SELECT xp, level FROM places WHERE place_id=?", (place_id,)).fetchone()
+    updated = db.execute(
+        "SELECT xp, level, place_type FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    preferred = get_place_preferred_category(updated["place_type"] or "")
+    specialty = bool(preferred and item_category and preferred.upper() == item_category.upper())
     return {
-        "place_id":       place_id,
-        "instance_id":    body.instance_id,
-        "rarity":         rarity,
-        "xp_gained":      xp_gained,
-        "new_place_xp":   updated["xp"],
+        "place_id":        place_id,
+        "instance_id":     body.instance_id,
+        "rarity":          rarity,
+        "xp_gained":       xp_gained,
+        "new_place_xp":    updated["xp"],
         "new_place_level": updated["level"],
-        "levelled_up":    levelled_up,
+        "levelled_up":     levelled_up,
+        "specialty_bonus": specialty,
     }

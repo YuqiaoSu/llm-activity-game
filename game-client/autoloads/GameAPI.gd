@@ -89,6 +89,7 @@ signal poll_cooldown_updated(sec: int)
 signal challenge_streak_updated(data: Dictionary)
 signal mood_updated(data: Dictionary)
 signal login_streak_updated(data: Dictionary)
+signal achievement_export_ready(data: Dictionary)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -666,6 +667,15 @@ func donate_item_to_place(place_id: String, instance_id: String) -> void:
 	_http_post("/places/%s/donate" % place_id, func(code: int, data: Dictionary) -> void:
 		donation_completed.emit(code == 200, data)
 	, body_str)
+
+
+func fetch_achievement_export() -> void:
+	_http_get("/achievements/export-text", func(data: Dictionary) -> void:
+		if data is Dictionary:
+			achievement_export_ready.emit(data)
+		else:
+			push_error("GameAPI: /achievements/export-text response is not a Dictionary")
+	)
 
 
 func fetch_mood() -> void:

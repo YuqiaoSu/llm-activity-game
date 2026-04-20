@@ -51,6 +51,31 @@ func _ready() -> void:
 	GameAPI.achievements_updated.connect(_on_achievements)
 	GameAPI.achievement_pinned.connect(_on_pin_changed)
 	GameAPI.achievement_unpinned.connect(_on_pin_changed)
+
+	# Export button in header
+	var export_btn := Button.new()
+	export_btn.text = "Export 📋"
+	export_btn.add_theme_font_size_override("font_size", 10)
+	$VBox/Header.add_child(export_btn)
+	var _export_flash: Label = null
+	GameAPI.achievement_export_ready.connect(func(data: Dictionary) -> void:
+		var txt: String = data.get("text", "")
+		print("[AchievementExport]\n" + txt)
+		if is_instance_valid(_export_flash):
+			_export_flash.queue_free()
+		_export_flash = Label.new()
+		_export_flash.text = "Copied to Output! (%d unlocked)" % data.get("count", 0)
+		_export_flash.modulate = Color(0.50, 1.00, 0.50)
+		_export_flash.add_theme_font_size_override("font_size", 10)
+		$VBox/Header.add_child(_export_flash)
+		var t := get_tree().create_timer(2.0)
+		t.timeout.connect(func() -> void:
+			if is_instance_valid(_export_flash):
+				_export_flash.queue_free()
+		)
+	)
+	export_btn.pressed.connect(func() -> void: GameAPI.fetch_achievement_export())
+
 	_refresh()
 
 

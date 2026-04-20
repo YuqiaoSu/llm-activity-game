@@ -241,3 +241,38 @@ def unpin_achievement(achievement_id: str, request: Request) -> dict:
     )
     db.commit()
     return {"achievement_id": achievement_id, "unpinned": True}
+
+
+@router.get("/export-text")
+def export_achievements_text(request: Request) -> dict:
+    """Return a plain-text achievement card of all unlocked achievements.
+
+    Formatted for copying/sharing. Sorted by unlocked_at ascending.
+    Returns {text: str, count: int}.
+    """
+    db = request.app.state.db
+
+    # Get player name for header
+    name_row = db.execute(
+        "SELECT name FROM player_profile WHERE character_id='player_default'"
+    ).fetchone()
+    player_name: str = name_row["name"] if name_row else "Player"
+
+    rows = db.execute(
+        """
+        SELECT a.name, a.description, pa.unlocked_at
+        FROM achievements a
+        JOIN player_achievements pa
+          ON pa.achievement_id = a.achievement_id AND pa.player_id = 'player_default'
+        ORDER BY pa.unlocked_at ASC
+        """
+    ).fetchall()
+
+    header = f"=== {player_name}'s Achievements ==="
+    lines = [header]
+    for r in rows:
+        lines.append(f"✓ {r['name']} — {r['description']}")
+
+    text = "\n".join(lines) if rows else header
+    return {"text": text, "count": len(rows)}
+

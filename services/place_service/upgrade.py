@@ -20,6 +20,21 @@ from services.progression.mood import compute_mood, mood_xp_multiplier
 from services.progression.decay import get_dormancy_info
 from services.progression.streak import get_streak
 
+# Maps place_type → preferred category for the specialty bonus
+_PLACE_TYPE_TO_CATEGORY: dict[str, str] = {
+    "library":    "LEARN",
+    "gym":        "WORK",
+    "cafe":       "SOCIAL",
+    "lab":        "LEARN",
+    "studio":     "CREATE",
+    "workshop":   "WORK",
+    "park":       "SOCIAL",
+    "office":     "WORK",
+    "classroom":  "LEARN",
+}
+
+_SPECIALTY_MULTIPLIER = 1.5
+
 
 def xp_threshold(level: int) -> int:
     """Minimum cumulative XP to reach `level` (level 1 = 0)."""
@@ -38,11 +53,17 @@ def xp_to_level(xp: int) -> int:
     return level
 
 
+def get_place_preferred_category(place_type: str) -> str | None:
+    """Return the preferred category for a given place_type, or None if no specialty."""
+    return _PLACE_TYPE_TO_CATEGORY.get(place_type.lower())
+
+
 def award_place_xp(
     db: sqlite3.Connection,
     place_id: str,
     xp: int,
     character_id: str = "player_default",
+    chunk_category: str | None = None,
 ) -> bool:
     """Award `xp` to a place and trigger a level-up notification if the level changed.
 
@@ -60,6 +81,16 @@ def award_place_xp(
         dormancy["dormant_days"],
     )
     xp = max(1, int(xp * mood_xp_multiplier(mood)))
+
+    # Apply specialty bonus when chunk/item category matches the place's preferred category
+    if chunk_category:
+        place_type_row = db.execute(
+            "SELECT place_type FROM places WHERE place_id=?", (place_id,)
+        ).fetchone()
+        if place_type_row:
+            preferred = get_place_preferred_category(place_type_row["place_type"])
+            if preferred and preferred.upper() == chunk_category.upper():
+                xp = max(1, int(xp * _SPECIALTY_MULTIPLIER))
 
     row = db.execute(
         "SELECT xp, level FROM places WHERE place_id=?",

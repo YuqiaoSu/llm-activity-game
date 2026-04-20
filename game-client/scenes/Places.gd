@@ -199,6 +199,15 @@ func _make_card(place: Dictionary) -> Control:
 	hbox.add_child(cats_lbl)
 	vbox.add_child(hbox)
 
+	# ── specialty badge ───────────────────────────────────────────────────────
+	var pref_cat = place.get("preferred_category", null)
+	if pref_cat != null and pref_cat != "":
+		var spec_lbl := Label.new()
+		spec_lbl.text = "  ⭐ Specialty: %s (1.5× XP for matching gifts)" % str(pref_cat)
+		spec_lbl.modulate = Color(1.0, 0.84, 0.0)
+		spec_lbl.add_theme_font_size_override("font_size", 10)
+		vbox.add_child(spec_lbl)
+
 	# ── set bonus badge ──────────────────────────────────────────────────────
 	if place.get("set_bonus_active", false):
 		var bonus_lbl := Label.new()
