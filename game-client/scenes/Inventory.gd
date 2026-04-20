@@ -41,6 +41,8 @@ var _expiry_overlay: Control = null
 var _expiry_list: VBoxContainer = null
 var _craft_history_overlay: Control = null
 var _craft_history_list: VBoxContainer = null
+var _rarity_stats_overlay: Control = null
+var _rarity_stats_list: VBoxContainer = null
 
 
 func _ready() -> void:
@@ -133,6 +135,19 @@ func _ready() -> void:
 	$VBox/Header.add_child(hist_btn)
 	_build_craft_history_overlay()
 	GameAPI.crafting_history_updated.connect(_on_crafting_history)
+
+	# "📊 Rarity" button
+	var rarity_btn := Button.new()
+	rarity_btn.text = "📊 Rarity"
+	rarity_btn.add_theme_font_size_override("font_size", 10)
+	rarity_btn.pressed.connect(func() -> void:
+		GameAPI.fetch_rarity_stats()
+		if _rarity_stats_overlay != null and is_instance_valid(_rarity_stats_overlay):
+			_rarity_stats_overlay.visible = true
+	)
+	$VBox/Header.add_child(rarity_btn)
+	_build_rarity_stats_overlay()
+	GameAPI.rarity_stats_updated.connect(_on_rarity_stats)
 
 	GameAPI.inventory_updated.connect(_on_inventory)
 	GameAPI.equip_updated.connect(_on_equip_updated)
@@ -1440,6 +1455,69 @@ func _on_crafting_history(entries: Array) -> void:
 		lbl.text = "%s → %s [%s]  %s" % [action, item_id, rarity, happened]
 		lbl.add_theme_font_size_override("font_size", 11)
 		_craft_history_list.add_child(lbl)
+
+
+func _build_rarity_stats_overlay() -> void:
+	var overlay := ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.8)
+	overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	overlay.visible = false
+	_rarity_stats_overlay = overlay
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.custom_minimum_size = Vector2(300, 200)
+
+	var vbox := VBoxContainer.new()
+	var title := Label.new()
+	title.text = "Inventory Rarity Breakdown"
+	title.add_theme_font_size_override("font_size", 13)
+	vbox.add_child(title)
+
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 160)
+	var list := VBoxContainer.new()
+	_rarity_stats_list = list
+	scroll.add_child(list)
+	vbox.add_child(scroll)
+
+	var close_btn := Button.new()
+	close_btn.text = "Close"
+	close_btn.pressed.connect(func() -> void: overlay.visible = false)
+	vbox.add_child(close_btn)
+
+	panel.add_child(vbox)
+	overlay.add_child(panel)
+	add_child(overlay)
+
+
+func _on_rarity_stats(entries: Array) -> void:
+	if _rarity_stats_list == null or not is_instance_valid(_rarity_stats_list):
+		return
+	for child in _rarity_stats_list.get_children():
+		child.queue_free()
+	if entries.is_empty():
+		var empty_lbl := Label.new()
+		empty_lbl.text = "No items in inventory."
+		empty_lbl.add_theme_font_size_override("font_size", 11)
+		_rarity_stats_list.add_child(empty_lbl)
+		return
+	for entry in entries:
+		var rar: String  = str(entry.get("rarity", "?"))
+		var cnt: int     = int(entry.get("count", 0))
+		var pct: float   = float(entry.get("pct", 0.0))
+		var row := HBoxContainer.new()
+		var lbl := Label.new()
+		lbl.text = "%-12s  %3d  (%5.1f%%)" % [rar, cnt, pct]
+		lbl.add_theme_font_size_override("font_size", 11)
+		row.add_child(lbl)
+		var bar := ProgressBar.new()
+		bar.custom_minimum_size = Vector2(100, 14)
+		bar.max_value = 100
+		bar.value = pct
+		bar.show_percentage = false
+		row.add_child(bar)
+		_rarity_stats_list.add_child(row)
 
 
 func _show_batch_tag_dialog() -> void:

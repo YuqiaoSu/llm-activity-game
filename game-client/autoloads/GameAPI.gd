@@ -106,6 +106,8 @@ signal place_visits_updated(entries: Array)
 signal expiring_items_updated(entries: Array)
 signal crafting_history_updated(entries: Array)
 signal batch_tag_completed(data: Dictionary)
+signal inventory_tags_list_updated(tags: Array)
+signal rarity_stats_updated(data: Array)
 
 var last_challenge_id: String = ""
 var compare_items: Array = []
@@ -506,6 +508,24 @@ func fetch_expiring_items(days: int = 7) -> void:
 			expiring_items_updated.emit(data as Array)
 		else:
 			push_error("GameAPI: /inventory/expiring response not an Array")
+	)
+
+
+func fetch_inventory_tags() -> void:
+	_http_get("/inventory/tags", func(data) -> void:
+		if data is Dictionary:
+			inventory_tags_list_updated.emit(data.get("tags", []) as Array)
+		else:
+			push_error("GameAPI: /inventory/tags response not a Dictionary")
+	)
+
+
+func fetch_rarity_stats() -> void:
+	_http_get("/inventory/rarity-stats", func(data) -> void:
+		if data is Array:
+			rarity_stats_updated.emit(data as Array)
+		else:
+			push_error("GameAPI: /inventory/rarity-stats response not an Array")
 	)
 
 

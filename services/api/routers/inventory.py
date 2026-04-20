@@ -1166,6 +1166,53 @@ def get_crafting_history(
     ]
 
 
+@router.get("/rarity-stats")
+def get_rarity_stats(request: Request) -> list[dict]:
+    """Return per-rarity counts and percentages for the player's current non-expired inventory."""
+    db = request.app.state.db
+    rows = db.execute(
+        """
+        SELECT json_extract(d.data, '$.rarity') AS rarity, COUNT(i.instance_id) AS cnt
+        FROM inventory i
+        JOIN item_definitions d ON i.item_id = d.item_id
+        WHERE i.character_id = 'player_default'
+          AND (i.expires_at IS NULL OR i.expires_at > datetime('now'))
+        GROUP BY rarity
+        """
+    ).fetchall()
+    counts: dict[str, int] = {r["rarity"]: r["cnt"] for r in rows}
+    total = sum(counts.values())
+    result = []
+    for rar in _RARITY_ORDER:
+        cnt = counts.get(rar, 0)
+        if cnt == 0:
+            continue
+        result.append({
+            "rarity": rar,
+            "count": cnt,
+            "pct": round(cnt / total * 100, 1) if total else 0.0,
+        })
+    return result
+
+
+@router.get("/tags")
+def get_inventory_tags(request: Request) -> dict:
+    """Return all distinct tag values the player has applied across their inventory."""
+    db = request.app.state.db
+    rows = db.execute(
+        "SELECT tags FROM inventory WHERE character_id='player_default' AND tags IS NOT NULL AND tags != '[]'"
+    ).fetchall()
+    tag_set: set[str] = set()
+    for row in rows:
+        try:
+            parsed = json.loads(row["tags"])
+            if isinstance(parsed, list):
+                tag_set.update(t for t in parsed if isinstance(t, str) and t)
+        except (ValueError, TypeError):
+            pass
+    return {"tags": sorted(tag_set)}
+
+
 @router.get("/sets")
 def get_item_sets(request: Request) -> list[dict]:
     """Return all named item sets with per-item owned status.

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Request, HTTPException, Query
 from pydantic import BaseModel, Field
 from services.place_service.service import get_place, list_places
 from services.place_service.effects import rebuild_active_effects, compute_set_bonuses
-from services.place_service.upgrade import award_place_xp, get_place_preferred_category
+from services.place_service.upgrade import award_place_xp, get_place_preferred_category, xp_to_level
 from services.progression.xp import get_total_xp, deduct_total_xp
 from services.reward_ledger.ledger import record_drop, _insert_notification
 from services.models.item import ItemDefinition, DropRequirement
@@ -316,6 +316,24 @@ def _add_preferred_category(place_dicts: list[dict]) -> list[dict]:
     return place_dicts
 
 
+def _add_unlock_progress(db, place_dicts: list[dict]) -> list[dict]:
+    player_xp = get_total_xp(db, "player_default")
+    player_level = xp_to_level(player_xp)
+    for p in place_dicts:
+        cond = p.get("unlock_condition")
+        if cond and isinstance(cond, dict) and cond.get("condition_type") == "player_level":
+            required = int(cond.get("params", {}).get("min_level", 1))
+            pct = min(100, int(player_level / required * 100)) if required > 0 else 100
+            p["unlock_progress"] = {
+                "current_level": player_level,
+                "required_level": required,
+                "pct": pct,
+            }
+        else:
+            p["unlock_progress"] = None
+    return place_dicts
+
+
 def _add_days_since_visit(place_dicts: list[dict]) -> list[dict]:
     today = date_type.today().isoformat()
     for p in place_dicts:
@@ -338,6 +356,7 @@ def get_places(request: Request) -> list[dict]:
     _add_set_bonus_flag(db, dicts)
     _add_preferred_category(dicts)
     _add_days_since_visit(dicts)
+    _add_unlock_progress(db, dicts)
     return _add_perks(db, dicts)
 
 
