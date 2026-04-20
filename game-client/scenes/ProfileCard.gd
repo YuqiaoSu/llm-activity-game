@@ -258,6 +258,8 @@ func _ready() -> void:
 	GameAPI.fetch_season()
 	GameAPI.fetch_mood()
 	GameAPI.post_login_checkin()
+	GameAPI.mastery_updated.connect(_on_mastery)
+	GameAPI.fetch_mastery()
 
 
 func _exit_tree() -> void:
@@ -277,6 +279,8 @@ func _exit_tree() -> void:
 		GameAPI.xp_projection_updated.disconnect(_on_xp_projection)
 	if GameAPI.player_settings_updated.is_connected(_on_player_settings):
 		GameAPI.player_settings_updated.disconnect(_on_player_settings)
+	if GameAPI.mastery_updated.is_connected(_on_mastery):
+		GameAPI.mastery_updated.disconnect(_on_mastery)
 
 
 func _on_poll_pressed() -> void:
@@ -350,6 +354,7 @@ func _on_profile(data: Dictionary) -> void:
 
 var _cat_breakdown_list: VBoxContainer = null
 var _cat_breakdown_visible: bool = false
+var _mastery_cache: Dictionary = {}  # category → {tier_emoji, tier}
 
 
 func _rebuild_category_breakdown(breakdown: Array) -> void:
@@ -394,9 +399,21 @@ func _rebuild_category_breakdown(breakdown: Array) -> void:
 		var lvl: int = entry.get("level", 1) as int
 
 		var row := HBoxContainer.new()
+
+		# Tier emoji from mastery cache
+		var cat_key: String = str(entry.get("category", "")).to_upper()
+		var tier_emoji: String = ""
+		if _mastery_cache.has(cat_key):
+			tier_emoji = str((_mastery_cache[cat_key] as Dictionary).get("tier_emoji", ""))
+		if tier_emoji != "":
+			var emoji_lbl := Label.new()
+			emoji_lbl.text = tier_emoji
+			emoji_lbl.add_theme_font_size_override("font_size", 10)
+			row.add_child(emoji_lbl)
+
 		var cat_lbl := Label.new()
 		cat_lbl.text = cat
-		cat_lbl.custom_minimum_size.x = 80
+		cat_lbl.custom_minimum_size.x = 72
 		cat_lbl.add_theme_font_size_override("font_size", 10)
 
 		var lvl_lbl := Label.new()
@@ -423,6 +440,22 @@ func _rebuild_category_breakdown(breakdown: Array) -> void:
 		row.add_child(bar_bg)
 		row.add_child(xp_lbl)
 		_cat_breakdown_list.add_child(row)
+
+
+func _on_mastery(entries: Array) -> void:
+	_mastery_cache = {}
+	for raw in entries:
+		if raw is Dictionary:
+			var entry := raw as Dictionary
+			var cat: String = str(entry.get("category", "")).to_upper()
+			_mastery_cache[cat] = entry
+	# Re-render the breakdown to show updated tier emojis
+	if _cat_breakdown_list != null:
+		var breakdown: Array = []
+		for cat in _mastery_cache:
+			var e := _mastery_cache[cat] as Dictionary
+			breakdown.append({"category": cat, "xp": e.get("xp", 0), "level": e.get("level", 1)})
+		_rebuild_category_breakdown(breakdown)
 
 
 func _rebuild_top_cats(category_xp: Dictionary) -> void:

@@ -11,6 +11,7 @@ from services.progression.config import EVOLUTION_STAGES
 from services.progression.decay import get_dormancy_info
 from services.progression.mood import compute_mood
 from services.progression.focus_streak import get_focus_streak
+from services.progression.mastery import mastery_entry
 
 router = APIRouter()
 
@@ -807,3 +808,16 @@ def get_player_journal(
             "happened_at": row["created_at"],
         })
     return result
+
+
+@router.get("/mastery")
+def get_mastery(request: Request) -> list[dict]:
+    """Return category mastery tiers for the player, sorted by XP descending."""
+    db = request.app.state.db
+    rows = db.execute(
+        "SELECT category, xp FROM player_category_xp WHERE character_id='player_default'",
+    ).fetchall()
+    return sorted(
+        [mastery_entry(row["category"], row["xp"]) for row in rows],
+        key=lambda d: (-d["xp"], d["category"]),
+    )
