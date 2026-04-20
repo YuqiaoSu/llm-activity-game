@@ -58,6 +58,26 @@ func _ready() -> void:
 		var scale: float = d.get("goal_difficulty_scale", 1.0) as float
 		diff_spin.value = scale
 	)
+
+	# Stats section
+	var stats_btn := Button.new()
+	stats_btn.text = "📊 Stats"
+	stats_btn.add_theme_font_size_override("font_size", 10)
+	var stats_panel := VBoxContainer.new()
+	stats_panel.visible = false
+	stats_btn.pressed.connect(func() -> void:
+		stats_panel.visible = not stats_panel.visible
+		if stats_panel.visible:
+			GameAPI.fetch_goal_stats()
+	)
+	$VBox.add_child(stats_btn)
+	$VBox.add_child(stats_panel)
+	$VBox.move_child(stats_btn, diff_row.get_index() + 1)
+	$VBox.move_child(stats_panel, stats_btn.get_index() + 1)
+	GameAPI.goal_stats_updated.connect(func(data: Dictionary) -> void:
+		_rebuild_stats_panel(stats_panel, data)
+	)
+
 	GameAPI.fetch_player_settings()
 	GameAPI.fetch_daily_goals()
 	GameAPI.fetch_goal_streak()
@@ -186,3 +206,52 @@ func _make_row(g: Dictionary) -> Control:
 	vbox.add_child(sep)
 
 	return vbox
+
+
+func _rebuild_stats_panel(panel: VBoxContainer, data: Dictionary) -> void:
+	for child in panel.get_children():
+		child.queue_free()
+
+	var total_set:   int   = data.get("total_goals_set", 0) as int
+	var total_done:  int   = data.get("total_completed", 0) as int
+	var rate:        float = data.get("completion_rate_pct", 0.0) as float
+	var cur_streak:  int   = data.get("current_streak", 0) as int
+	var best_streak: int   = data.get("best_streak", 0) as int
+
+	var summary_lbl := Label.new()
+	summary_lbl.text = "Overall: %d / %d goals  (%.1f%%)" % [total_done, total_set, rate]
+	summary_lbl.modulate = Color(0.85, 0.85, 0.85)
+	summary_lbl.add_theme_font_size_override("font_size", 10)
+	panel.add_child(summary_lbl)
+
+	var streak_lbl := Label.new()
+	streak_lbl.text = "  Streak: %d current · %d best" % [cur_streak, best_streak]
+	streak_lbl.modulate = Color(1.0, 0.75, 0.3)
+	streak_lbl.add_theme_font_size_override("font_size", 10)
+	panel.add_child(streak_lbl)
+
+	var by_cat: Array = data.get("by_category", []) as Array
+	for raw in by_cat:
+		if not raw is Dictionary:
+			continue
+		var cat_data := raw as Dictionary
+		var cat_row := HBoxContainer.new()
+
+		var cat_lbl := Label.new()
+		cat_lbl.text = "  %s" % str(cat_data.get("category", "?")).capitalize()
+		cat_lbl.custom_minimum_size.x = 70
+		cat_lbl.add_theme_font_size_override("font_size", 10)
+
+		var rate_lbl := Label.new()
+		var cat_rate: float = cat_data.get("rate_pct", 0.0) as float
+		rate_lbl.text = "%.0f%%  (%d/%d)" % [
+			cat_rate,
+			cat_data.get("completed", 0) as int,
+			cat_data.get("set", 0) as int,
+		]
+		rate_lbl.modulate = Color(0.3, 0.85, 0.3) if cat_rate >= 70.0 else Color(0.85, 0.55, 0.25)
+		rate_lbl.add_theme_font_size_override("font_size", 10)
+
+		cat_row.add_child(cat_lbl)
+		cat_row.add_child(rate_lbl)
+		panel.add_child(cat_row)
