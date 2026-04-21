@@ -1,3 +1,20 @@
+"""Inventory management API.
+
+Endpoints in this module cover the full item lifecycle:
+  GET  /inventory               — list owned items grouped by item_id
+  POST /inventory/{id}/sell     — sell an instance for XP
+  POST /inventory/bulk-sell     — sell multiple instances in one call
+  POST /inventory/bulk-repair   — restore durability on multiple items
+  POST /inventory/fuse          — fuse 3× copies into a rarity tier upgrade
+  POST /inventory/{id}/craft    — craft a new item via recipe
+  POST /inventory/{id}/upgrade  — spend XP to upgrade an item instance
+  PATCH /inventory/{id}/lock    — lock/unlock an item against accidental sale
+  PATCH /inventory/{id}/note    — attach a freetext note to an instance
+  PATCH /inventory/{id}/tags    — manage user-defined tags on an instance
+  GET  /inventory/drop-odds     — show weighted drop probabilities
+  GET  /inventory/rarity-stats  — distribution of owned items by rarity
+  GET  /inventory/tags          — list all tags the player has used
+"""
 import json
 import random
 import uuid

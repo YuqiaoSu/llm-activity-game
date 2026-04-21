@@ -1,3 +1,19 @@
+"""Tracker-to-game sync agent.
+
+``SyncAgent.poll()`` is the single entry point that advances all game state
+for a player.  It is called either by the background ``asyncio`` task (every
+5 min by default) or manually via the ``/sync/poll`` endpoint.
+
+Execution order inside ``poll()``:
+  1. Rate-limit guard (manual calls only)
+  2. Apply daily XP decay / flag recovery bonus
+  3. Fetch new activity chunks from the tracker
+  4. Load active effects (place perks, skill bonuses, set bonuses)
+  5. Compute XP multiplier (streak, recovery, mood, combo)
+  6. For each chunk: award category XP, roll item drops, detect level-ups
+  7. Save cursor so the next poll resumes from here
+  8. Post-poll: update streaks, achievements, weekly challenges, daily goals
+"""
 from __future__ import annotations
 import sqlite3
 import uuid
@@ -55,6 +71,13 @@ _SENTINEL_PLACE = Place(
 
 
 class SyncAgent:
+    """Polls the tracker for new activity chunks and advances game state.
+
+    One ``SyncAgent`` instance is shared across the lifetime of the FastAPI app
+    (see ``api/main.py``).  All public methods are safe to call from an
+    ``asyncio`` event loop via ``run_in_executor`` if blocking I/O is a concern.
+    """
+
     def __init__(
         self,
         db: sqlite3.Connection,
@@ -64,6 +87,16 @@ class SyncAgent:
         rate_limiter: RateLimiter | None = None,
         min_confidence: float = 0.5,
     ) -> None:
+        """Initialise the sync agent.
+
+        Args:
+            db: Open SQLite connection shared with the FastAPI app.
+            tracker_client: HTTP client used to fetch chunks from the tracker.
+            character_id: The player's canonical identifier (``"player_default"`` in production).
+            strategy: Drop-roll strategy; defaults to :class:`SessionStrategy`.
+            rate_limiter: Cooldown guard for manual polls; defaults to 60 s.
+            min_confidence: Chunks below this classifier confidence are skipped.
+        """
         self.db = db
         self.tracker_client = tracker_client
         self.character_id = character_id
@@ -73,12 +106,14 @@ class SyncAgent:
         self._last_combo_active: bool = False
 
     def _get_cursor(self) -> str | None:
+        """Return the stored chunk cursor for this player, or ``None`` on first run."""
         row = self.db.execute(
             "SELECT last_cursor FROM sync_state WHERE player_id='default'"
         ).fetchone()
         return row["last_cursor"] if row else None
 
     def _save_cursor(self, cursor: str) -> None:
+        """Persist *cursor* to ``sync_state`` so the next poll resumes from this point."""
         now = datetime.now(timezone.utc).isoformat()
         self.db.execute(
             "UPDATE sync_state SET last_cursor=?, last_sync_at=? WHERE player_id='default'",
@@ -87,6 +122,7 @@ class SyncAgent:
         self.db.commit()
 
     def _load_catalogue(self) -> list[ItemDefinition]:
+        """Load and deserialise all item definitions from the database. Skips malformed rows."""
         rows = self.db.execute("SELECT data FROM item_definitions").fetchall()
         result: list[ItemDefinition] = []
         for row in rows:
@@ -97,6 +133,7 @@ class SyncAgent:
         return result
 
     def _get_player_luck(self) -> int:
+        """Return the player's current luck stat (default 5 if profile row is absent)."""
         row = self.db.execute(
             "SELECT luck FROM player_profile WHERE character_id=?",
             (self.character_id,),
@@ -189,6 +226,24 @@ class SyncAgent:
             self.db.commit()
 
     def poll(self, manual: bool = False) -> PollResult:
+        """Fetch new tracker chunks and advance all game state for the player.
+
+        Returns:
+            ``PollResult.ON_COOLDOWN``   — manual call rejected by rate limiter.
+            ``PollResult.NO_NEW_CHUNKS`` — tracker returned nothing new; state unchanged.
+            ``PollResult.OK``            — at least one chunk was processed.
+
+        Side effects (in order):
+          - Applies daily XP decay (no-op if already ran today).
+          - Marks a recovery bonus if the player was dormant.
+          - Awards category XP per chunk, scaled by: streak bonus · recovery bonus ·
+            mood multiplier · combo bonus · place/skill effects · active event multipliers.
+          - Rolls item drops using the configured ``strategy`` and active drop-weight mods.
+          - Fires level-up notifications and unlocks newly-eligible places on level gain.
+          - Saves the new cursor so the next poll is incremental.
+          - Updates activity streak, focus streak, achievements, weekly challenges,
+            daily goals, and the daily XP goal notification (all idempotent).
+        """
         if manual and not self.rate_limiter.can_trigger(self.character_id):
             return PollResult.ON_COOLDOWN
         if manual:

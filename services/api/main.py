@@ -1,3 +1,14 @@
+"""FastAPI application factory for LLM Activity Game Services.
+
+``create_app()`` wires together the database, the background sync loop, and all
+19 API routers.  It is called at module load time to produce the ``app`` instance
+used by Uvicorn, and is also called by tests with an injected in-memory database.
+
+Background poll:
+  A single asyncio task runs ``SyncAgent.poll()`` every
+  ``POLL_INTERVAL_SEC`` seconds (default 300).  The interval can be overridden
+  at startup via the ``POLL_INTERVAL_SEC`` environment variable.
+"""
 from __future__ import annotations
 import asyncio
 import logging

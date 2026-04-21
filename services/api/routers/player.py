@@ -1,3 +1,26 @@
+"""Player profile and progression API.
+
+Covers everything related to the player's top-level state:
+  GET   /player/profile         — full profile snapshot (XP, level, mood, streak …)
+  PATCH /player/profile         — rename the player's companion
+  GET   /player/settings        — personal settings (daily XP target, difficulty scale)
+  PATCH /player/settings        — update settings
+  GET   /player/luck            — current luck stat and upgrade cost
+  POST  /player/luck/upgrade    — spend XP to raise luck
+  GET   /player/titles          — all titles with earned/unearned status
+  POST  /player/titles/{id}/equip — equip a title
+  GET   /player/xp-projection   — estimated days to next level-up
+  GET   /player/focus-streak    — consecutive days with focus (WORK) sessions
+  GET   /player/streak-freeze   — streak-freeze inventory and eligibility
+  POST  /player/streak-freeze/buy — purchase a streak freeze
+  GET   /player/mood            — current mood multiplier
+  PATCH /player/mood            — set mood (HAPPY | NEUTRAL | FOCUSED | TIRED)
+  GET   /player/login-streak    — daily login streak and bonus schedule
+  POST  /player/login-checkin   — record a login for the daily streak
+  GET   /player/daily-tip       — contextual tip based on current state
+  GET   /player/export          — full data export for the player
+  GET   /player/season          — current season progress and rewards
+"""
 import json
 import math
 import sqlite3
@@ -231,6 +254,15 @@ def patch_player_profile(body: _RenameBody, request: Request) -> dict:
 
 @router.get("/profile")
 def get_player_profile(request: Request) -> dict:
+    """Return the full player profile snapshot.
+
+    Includes: character identity, total and per-category XP, level, evolution stage,
+    level-progress bounds, streak, dormancy/recovery state, mood multiplier, visual
+    config, equipped items and title, and a per-category XP breakdown sorted by XP.
+
+    Raises 404 if the player profile row does not exist.
+    Raises 500 if the stored visual or equipped_items JSON is corrupted.
+    """
     db = request.app.state.db
     row = db.execute(
         "SELECT * FROM player_profile WHERE character_id='player_default'"

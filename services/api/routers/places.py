@@ -1,3 +1,21 @@
+"""Place management API.
+
+Places are persistent game locations that players unlock, visit, and invest in.
+Each place has typed slots that can hold inventory items, granting passive effects
+and XP bonuses while occupied.
+
+Key endpoints:
+  GET  /places                       — list all places with enriched slot/perk data
+  GET  /places/{id}                  — single place detail
+  PUT  /places/{id}/slots/{slot_id}  — assign or remove an item from a slot
+  POST /places/{id}/visit            — record a visit and award streak rewards
+  POST /places/{id}/invest           — spend XP to invest in a place
+  POST /places/{id}/donate           — donate an item as a permanent perk
+  POST /places/{id}/gift-item        — send a gift item to a place
+  GET  /places/{id}/slot-recommend   — best available item per empty slot
+  GET  /places/{id}/upgrade-preview  — cost/benefit preview before upgrading
+  GET  /places/leaderboard           — places ranked by total XP earned
+"""
 import json
 import random
 import uuid
@@ -252,6 +270,49 @@ def get_slot_recommendations(
     return results
 
 
+@router.get("/{place_id}/slot-stats")
+def get_place_slot_stats(place_id: str, request: Request) -> dict:
+    """Return slot fill and category-match statistics for a place."""
+    db = request.app.state.db
+    place_row = db.execute(
+        "SELECT place_id, place_type FROM places WHERE place_id=?", (place_id,)
+    ).fetchone()
+    if place_row is None:
+        raise HTTPException(status_code=404, detail="Place not found")
+
+    slots = db.execute(
+        "SELECT slot_id, occupant_id FROM place_slots WHERE place_id=?", (place_id,)
+    ).fetchall()
+    total_slots = len(slots)
+    filled_slots = sum(1 for s in slots if s["occupant_id"] is not None)
+    empty_slots = total_slots - filled_slots
+    fill_pct = round(filled_slots / total_slots * 100, 1) if total_slots else 0.0
+
+    preferred = get_place_preferred_category(place_row["place_type"])
+    matching = 0
+    if preferred and filled_slots:
+        rows = db.execute(
+            """
+            SELECT json_extract(d.data, '$.category') AS cat
+            FROM place_slots ps
+            JOIN inventory i ON ps.occupant_id = i.instance_id
+            JOIN item_definitions d ON i.item_id = d.item_id
+            WHERE ps.place_id = ? AND ps.occupant_id IS NOT NULL
+            """,
+            (place_id,),
+        ).fetchall()
+        matching = sum(1 for r in rows if r["cat"] and r["cat"].upper() == preferred.upper())
+    matching_pct = round(matching / filled_slots * 100, 1) if filled_slots else 0.0
+
+    return {
+        "total_slots": total_slots,
+        "filled_slots": filled_slots,
+        "empty_slots": empty_slots,
+        "fill_pct": fill_pct,
+        "matching_pct": matching_pct,
+    }
+
+
 @router.get("/{place_id}/upgrade-preview")
 def get_place_upgrade_preview(
     place_id: str,
@@ -311,12 +372,18 @@ def get_place_history(
 
 
 def _add_preferred_category(place_dicts: list[dict]) -> list[dict]:
+    """Annotate each place dict with a ``preferred_category`` field derived from its place_type."""
     for p in place_dicts:
         p["preferred_category"] = get_place_preferred_category(p.get("place_type", ""))
     return place_dicts
 
 
 def _add_unlock_progress(db, place_dicts: list[dict]) -> list[dict]:
+    """Annotate each locked place with ``unlock_progress`` (current_level, required_level, pct).
+
+    Only ``player_level`` unlock conditions are supported; all others get ``unlock_progress=None``.
+    Unlocked places also get ``unlock_progress=None`` — the field is only meaningful when locked.
+    """
     player_xp = get_total_xp(db, "player_default")
     player_level = xp_to_level(player_xp)
     for p in place_dicts:
@@ -335,6 +402,7 @@ def _add_unlock_progress(db, place_dicts: list[dict]) -> list[dict]:
 
 
 def _add_days_since_visit(place_dicts: list[dict]) -> list[dict]:
+    """Annotate each place dict with ``days_since_visit`` (int or None if never visited)."""
     today = date_type.today().isoformat()
     for p in place_dicts:
         lv = p.get("last_visit_date")
@@ -351,6 +419,8 @@ def _add_days_since_visit(place_dicts: list[dict]) -> list[dict]:
 
 @router.get("")
 def get_places(request: Request) -> list[dict]:
+    """Return all places enriched with slot occupants, perks, set-bonus flags,
+    preferred category, days since last visit, and unlock progress."""
     db = request.app.state.db
     dicts = [_enrich_slots(db, p.model_dump()) for p in list_places(db)]
     _add_set_bonus_flag(db, dicts)
@@ -362,6 +432,10 @@ def get_places(request: Request) -> list[dict]:
 
 @router.get("/{place_id}")
 def get_place_by_id(place_id: str, request: Request) -> dict:
+    """Return a single place enriched with slot occupants, perks, and set-bonus flags.
+
+    Raises 404 if *place_id* does not exist.
+    """
     db = request.app.state.db
     place = get_place(db, place_id)
     if place is None:
