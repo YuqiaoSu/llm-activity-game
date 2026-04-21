@@ -32,3 +32,6 @@ node_modules/
 *.db
 *.db-shm
 *.db-wal
+
+# Godot 4 generated uid files
+*.gd.uid
