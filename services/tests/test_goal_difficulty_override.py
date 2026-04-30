@@ -67,7 +67,6 @@ def test_settings_validation_too_high(client):
 
 
 def test_scale_halves_goal_target(db, client):
-    from services.progression.suggestions import get_suggestions
     from services.progression.daily_goals import ensure_daily_goals, get_daily_goals
     # Seed a suggestion item (WORK category)
     db.execute(

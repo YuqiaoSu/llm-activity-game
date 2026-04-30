@@ -1,8 +1,6 @@
 """Tests for challenge progress (50%) notifications."""
 import json
 import sqlite3
-import uuid
-from datetime import datetime, timezone
 
 import pytest
 

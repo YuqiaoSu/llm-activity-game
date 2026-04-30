@@ -13,7 +13,7 @@ Rules:
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, timedelta
+from datetime import date
 
 DORMANCY_THRESHOLD_DAYS = 3   # days of no activity before dormancy kicks in
 DECAY_RATE = 0.05             # 5% per day of dormancy

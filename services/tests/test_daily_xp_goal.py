@@ -79,8 +79,6 @@ def _seed_today_xp(db, xp: int) -> None:
 
 
 def test_notification_fires_when_xp_meets_target(db):
-    from services.sync_agent.agent import SyncAgent
-    from services.sync_agent.tracker_client import TrackerClient
     from services.reward_ledger.ledger import insert_daily_goal_hit_notification
 
     bootstrap_defaults(db)

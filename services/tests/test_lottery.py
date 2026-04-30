@@ -1,7 +1,7 @@
 import random
 from datetime import datetime, timezone
 from services.models.enums import Category, Rarity
-from services.models.item import DropRequirement, ItemDefinition, Effect
+from services.models.item import DropRequirement, ItemDefinition
 from services.models.place import Place, PlaceItemPool
 from services.contracts.chunk import Chunk
 from services.drop_engine.lottery import eligible_items, weighted_draw, DEFAULT_RARITY_WEIGHTS

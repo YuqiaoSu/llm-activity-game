@@ -11,7 +11,7 @@ No LLM required — all rules are deterministic and computed from SQLite.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone, date, timedelta
+from datetime import datetime, timezone, timedelta
 from services.models.enums import Category
 
 _WINDOW_DAYS = 7          # look-back window for "recent" activity

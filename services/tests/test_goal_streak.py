@@ -4,12 +4,10 @@ from __future__ import annotations
 import json
 import sqlite3
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import pytest
-from fastapi.testclient import TestClient
 
-from services.api.main import create_app
 from services.progression.daily_goals import check_goal_streak_reward
 from services.storage.db import init_db
 

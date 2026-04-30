@@ -1,5 +1,5 @@
 import httpx
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request
 from datetime import datetime, timezone
 from services.progression.streak import get_streak
 from services.progression.decay import get_dormancy_info, RECOVERY_MULTIPLIER

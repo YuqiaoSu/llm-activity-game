@@ -6,7 +6,7 @@ resets to 1 if the last focus was more than 1 day ago.
 """
 from __future__ import annotations
 import sqlite3
-from datetime import date, timedelta
+from datetime import date
 
 _FOCUS_LABELS = {"WORK", "LEARN"}
 _MILESTONE_AT = 5  # reward badge threshold

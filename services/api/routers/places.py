@@ -17,7 +17,6 @@ Key endpoints:
   GET  /places/leaderboard           — places ranked by total XP earned
 """
 import json
-import random
 import uuid
 from datetime import datetime, timezone, date as date_type
 from fastapi import APIRouter, Request, HTTPException, Query

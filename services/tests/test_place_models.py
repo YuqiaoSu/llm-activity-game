@@ -1,5 +1,4 @@
-from services.models.enums import Category, Rarity, SlotType, PlaceState
-from services.models.item import Effect
+from services.models.enums import Category, SlotType, PlaceState
 from services.models.place import Condition, PlaceItemPool, PlaceSlot, Place
 
 

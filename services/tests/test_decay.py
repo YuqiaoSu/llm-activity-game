@@ -11,12 +11,10 @@ from fastapi.testclient import TestClient
 from services.api.main import create_app
 from services.progression.decay import (
     DORMANCY_THRESHOLD_DAYS,
-    RECOVERY_MULTIPLIER,
     apply_daily_decay,
     consume_recovery_bonus,
     get_dormancy_info,
     mark_recovery_if_dormant,
-    migrate,
 )
 from services.storage.db import init_db
 

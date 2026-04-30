@@ -5,8 +5,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from services.models.enums import Category, Rarity
-from services.models.item import ItemDefinition, DropRequirement
 from services.progression.xp import get_total_xp
 from services.storage.db import init_db
 from services.sync_agent.agent import SyncAgent, _COMBO_BONUS_FACTOR, _COMBO_CATEGORY_THRESHOLD

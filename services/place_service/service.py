@@ -1,8 +1,7 @@
 from __future__ import annotations
 import json
 import sqlite3
-from services.models.enums import PlaceState, SlotType
-from services.models.place import Place, PlaceItemPool, PlaceSlot, Condition
+from services.models.place import Place, PlaceItemPool, PlaceSlot
 
 
 def _row_to_place(conn: sqlite3.Connection, row: sqlite3.Row) -> Place:

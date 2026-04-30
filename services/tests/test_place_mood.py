@@ -6,7 +6,7 @@ from datetime import date, timedelta
 import pytest
 
 from services.storage.db import init_db
-from services.progression.mood import mood_xp_multiplier, compute_mood
+from services.progression.mood import mood_xp_multiplier
 from services.place_service.upgrade import award_place_xp
 
 

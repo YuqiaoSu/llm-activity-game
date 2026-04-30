@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 import pytest
 from services.storage.db import init_db
 from services.notifications.desktop import (
@@ -76,7 +76,6 @@ def test_send_dispatches_to_windows_on_windows():
     with patch("services.notifications.desktop.platform.system", return_value="Windows"), \
          patch("services.notifications.desktop._notify_windows") as mock_win:
         event = threading.Event()
-        original = mock_win.side_effect
 
         def set_event(title, message):
             event.set()

@@ -1,8 +1,6 @@
 """Tests for daily goals — ensure_daily_goals, update_daily_goal_progress, GET /goals/daily."""
 import json
 import sqlite3
-import uuid
-from datetime import datetime, timezone, timedelta
 import pytest
 from fastapi.testclient import TestClient
 from services.storage.db import init_db

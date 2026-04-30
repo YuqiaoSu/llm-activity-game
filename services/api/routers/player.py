@@ -670,7 +670,7 @@ class _MoodBody(BaseModel):
 @router.get("/mood")
 def get_player_mood(request: Request) -> dict:
     """Return the player's current self-set mood and when it was set."""
-    from services.progression.mood import drop_mood_multiplier, _MOOD_DECAY_HOURS
+    from services.progression.mood import drop_mood_multiplier
     db = request.app.state.db
     row = db.execute(
         "SELECT mood, mood_set_at FROM player_profile WHERE character_id='player_default'"

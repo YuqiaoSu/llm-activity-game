@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-import uuid
 import pytest
 from services.storage.db import init_db
 from services.progression.milestones import (

@@ -5,7 +5,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from services.storage.db import init_db
-from services.place_service.upgrade import xp_threshold
 
 
 _PLAYER = "player_default"

@@ -1,4 +1,4 @@
-from services.models.enums import Category, Rarity, CharacterType, SlotType, PlaceState
+from services.models.enums import Category, Rarity, PlaceState
 
 
 def test_category_values():

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient

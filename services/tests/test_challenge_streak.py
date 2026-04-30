@@ -1,7 +1,7 @@
 """Tests for weekly challenge streak bonus."""
 import json
 import sqlite3
-from datetime import datetime, timezone, timedelta, date
+from datetime import datetime, timezone, date
 import pytest
 from fastapi.testclient import TestClient
 

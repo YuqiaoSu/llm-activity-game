@@ -351,10 +351,12 @@ def get_challenge_leaderboard(
 
     ghosts = [
         {
-            "player_id": gid,
-            "name":      _GHOST_NAMES[gid],
-            "score":     min(threshold, int(threshold * frac)),
-            "rank":      0,
+            "player_id":    gid,
+            "name":         _GHOST_NAMES[gid],
+            "score":        min(threshold, int(threshold * frac)),
+            "rank":         0,
+            "is_you":       False,
+            "pct_complete": 0.0,
         }
         for gid, frac in _GHOST_FRACTIONS.items()
     ]
@@ -369,8 +371,10 @@ def get_challenge_leaderboard(
 
     for g in ghosts:
         g["rank"] = score_to_rank[g["score"]]
+        g["pct_complete"] = round(min(100.0, g["score"] / threshold * 100), 1) if threshold else 0.0
 
     your_rank = score_to_rank[player_score]
+    player_pct = round(min(100.0, player_score / threshold * 100), 1) if threshold else 0.0
 
     return {
         "challenge_id":  challenge_id,
@@ -378,6 +382,8 @@ def get_challenge_leaderboard(
         "player_score":  player_score,
         "your_rank":     your_rank,
         "total_entries": 1 + len(ghosts),
+        "player_pct_complete": player_pct,
+        "is_you":        True,
         "ghosts":        ghosts,
     }
 

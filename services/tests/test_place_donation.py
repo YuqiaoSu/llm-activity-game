@@ -194,7 +194,6 @@ def _make_agent(db) -> SyncAgent:
 
 
 def _make_chunk(category: str = "WORK", duration_min: int = 10) -> dict:
-    from datetime import timedelta
     now = datetime.now(timezone.utc)
     return {
         "chunk_id": str(uuid.uuid4()),
